@@ -1,5 +1,5 @@
 import { observer } from "mobx-react-lite";
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { HexColorInput, HexColorPicker } from "react-colorful";
 
 import { colorPicker } from "#stores/useColorPicker";
@@ -18,6 +18,7 @@ export const ColorPicker = observer(function ColorPicker({
   label,
 }: ColorPickerProps) {
   const pickerRef = useRef<HTMLDivElement>(null);
+  const [position, setPosition] = useState({ left: 0, top: 0 });
 
   useEffect(() => {
     // Set focus to color picker.
@@ -25,6 +26,26 @@ export const ColorPicker = observer(function ColorPicker({
       ?.querySelector<HTMLElement>(".react-colorful__interactive")
       ?.focus();
   }, []);
+
+  useLayoutEffect(() => {
+    const anchor = colorPicker.anchor;
+    const picker = pickerRef.current;
+    if (!anchor || !picker) return;
+
+    const PICKER_GAP = 4;
+    const PICKER_MARGIN = 8;
+    const anchorRect = anchor.getBoundingClientRect();
+    const pickerHeight = picker.offsetHeight;
+    const shouldOpenAbove =
+      window.innerHeight - anchorRect.bottom < pickerHeight + PICKER_MARGIN;
+    const belowTop = anchor.offsetTop + anchor.offsetHeight + PICKER_GAP;
+    const aboveTop = anchor.offsetTop - pickerHeight - PICKER_GAP;
+
+    setPosition({
+      left: anchor.offsetLeft,
+      top: shouldOpenAbove ? aboveTop : belowTop,
+    });
+  }, [colorPicker.anchor]);
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
     e.stopPropagation();
@@ -56,8 +77,8 @@ export const ColorPicker = observer(function ColorPicker({
       className="ColorPicker"
       style={
         {
-          "--picker-left": `${colorPicker.coords.x}px`,
-          "--picker-top": `${colorPicker.coords.y}px`,
+          "--picker-left": `${position.left}px`,
+          "--picker-top": `${position.top}px`,
         } as React.CSSProperties
       }
       onMouseDown={(e) => {
