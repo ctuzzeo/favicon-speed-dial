@@ -1,6 +1,6 @@
 import { observer } from "mobx-react-lite";
 import { addOpacity } from "random-color-library";
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { dialColors } from "#lib/dialColors";
 import { contextMenu } from "#stores/useContextMenu";
@@ -46,6 +46,20 @@ export const Dial = observer(function Dial(props: DialProps) {
       : dialColors(props.name);
   const backgroundImage = settings.dialImages[props.id];
 
+  const nameFallback = (
+    <div>
+      <Name
+        {...{
+          name: settings.switchTitle
+            ? props.title
+              ? [props.title]
+              : [props.name.join(".")]
+            : props.name,
+        }}
+      />
+    </div>
+  );
+
   return (
     <a
       href={props.type === "bookmark" ? props.url : `#${props.id}`}
@@ -76,17 +90,14 @@ export const Dial = observer(function Dial(props: DialProps) {
       >
         {!settings.dialImages[props.id] &&
           (props.type === "bookmark" ? (
-            <div>
-              <Name
-                {...{
-                  name: settings.switchTitle
-                    ? props.title
-                      ? [props.title]
-                      : [props.name.join(".")]
-                    : props.name,
-                }}
+            settings.useFavicons ? (
+              <Favicon
+                url={props.url}
+                fallback={nameFallback}
               />
-            </div>
+            ) : (
+              nameFallback
+            )
           ) : (
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -100,6 +111,99 @@ export const Dial = observer(function Dial(props: DialProps) {
       </div>
       <Title {...{ title: props.title, name: props.name }} />
     </a>
+  );
+});
+
+const getFaviconUrls = (domain: string, fullUrl: string) => [
+  { url: `https://www.google.com/s2/favicons?domain=${domain}&sz=128`, type: "google" },
+  { url: `/_favicon/?pageUrl=${encodeURIComponent(fullUrl)}&size=128`, type: "native" },
+];
+
+const Favicon = observer(function Favicon({
+  url,
+  fallback,
+}: {
+  url?: string;
+  fallback: React.ReactNode;
+}) {
+  const [bestUrl, setBestUrl] = useState<string | null>(null);
+  const hostname = url ? new URL(url).hostname : "";
+
+  useEffect(() => {
+    if (!url) {
+      setBestUrl("");
+      return;
+    }
+
+    // If there's a manually selected favicon, use it immediately
+    if (settings.manualFavicons[hostname]) {
+      setBestUrl(settings.manualFavicons[hostname]);
+      return;
+    }
+
+    let isMounted = true;
+    const domain = new URL(url).hostname;
+    const candidates = getFaviconUrls(domain, url);
+
+    let loadedCount = 0;
+    const results: { url: string; width: number; type: string }[] = [];
+
+    const checkDone = () => {
+      if (!isMounted) return;
+      if (loadedCount === candidates.length) {
+        if (results.length === 0) {
+          setBestUrl("");
+          return;
+        }
+
+        const googles = results.filter((r) => r.type === "google");
+        const natives = results.filter((r) => r.type === "native");
+
+        // Prefer Google S2 (the 128x128 version), fall back to native cache
+        const chosen = googles[0] || natives[0];
+
+        setBestUrl(chosen?.url || "");
+      }
+    };
+
+    candidates.forEach((c) => {
+      const img = new Image();
+      img.src = c.url;
+      img.onload = () => {
+        if (isMounted) {
+          results.push({ url: c.url, width: img.naturalWidth, type: c.type });
+          loadedCount++;
+          checkDone();
+        }
+      };
+      img.onerror = () => {
+        if (isMounted) {
+          loadedCount++;
+          checkDone();
+        }
+      };
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [url, hostname, settings.manualFavicons[hostname]]);
+
+  // Return nothing while evaluating to prevent flicker
+  if (bestUrl === null) return null;
+  if (bestUrl === "") return <>{fallback}</>;
+
+  return (
+    <img
+      src={bestUrl}
+      alt=""
+      style={{
+        width: "60%",
+        height: "60%",
+        objectFit: "contain",
+        pointerEvents: "none",
+      }}
+    />
   );
 });
 

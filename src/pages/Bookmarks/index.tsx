@@ -8,6 +8,7 @@ import { AlertBanner } from "#components/AlertBanner";
 import { BookmarkModal } from "#components/BookmarkModal";
 import { ContextMenu } from "#components/ContextMenu";
 import { Grid } from "#components/Grid";
+import { FaviconModal } from "#components/FaviconModal";
 import { SettingsModal } from "#components/SettingsModal";
 import { WhatsNewModal } from "#components/WhatsNewModal";
 import { bookmarks } from "#stores/useBookmarks";
@@ -51,6 +52,7 @@ export const Bookmarks = observer(function Bookmarks() {
       {modals.isOpen === "whats-new" && <WhatsNewModal />}
       {modals.isOpen === "about" && <AboutModal />}
       {modals.isOpen === "settings-panel" && <SettingsModal />}
+      {modals.isOpen === "select-favicon" && <FaviconModal />}
       {modals.isOpen &&
         ["new-bookmark", "new-folder", "edit-bookmark", "edit-folder"].includes(
           modals.isOpen,

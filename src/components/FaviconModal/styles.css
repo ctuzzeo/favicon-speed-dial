@@ -1,0 +1,80 @@
+.FaviconModal {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.FaviconModal .description {
+  font-size: 14px;
+  color: var(--text-color-secondary);
+  line-height: 1.4;
+  margin: 0;
+}
+
+.FaviconModal .favicon-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.FaviconModal .favicon-candidate {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-color-secondary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  outline: none;
+}
+
+.FaviconModal .favicon-candidate:hover,
+.FaviconModal .favicon-candidate:focus {
+  border-color: var(--accent-color);
+  background: var(--bg-color-hover);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.FaviconModal .icon-wrapper {
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: white;
+  border-radius: 4px;
+  padding: 4px;
+}
+
+.FaviconModal .icon-wrapper img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.FaviconModal .provider-name {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-color);
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.FaviconModal .loading,
+.FaviconModal .no-candidates {
+  text-align: center;
+  padding: 32px;
+  color: var(--text-color-secondary);
+}
+
+.FaviconModal .buttons {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
+}

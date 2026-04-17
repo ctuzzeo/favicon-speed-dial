@@ -27,6 +27,7 @@ export const SettingsContent = observer(function SettingsContent() {
     handleSwitchTitle,
     handleThemeOption,
     handleTransparentDials,
+    handleUseFavicons,
     handleWallpaper,
     resetSettings,
     restoreFromJSON,
@@ -363,6 +364,27 @@ export const SettingsContent = observer(function SettingsContent() {
             onClick={() => handleTransparentDials(!settings.transparentDials)}
             className="switch-root"
             checked={settings.transparentDials as boolean}
+          >
+            <span className="switch-thumb" />
+          </Switch>
+        </div>
+      </div>
+      <div className="setting-wrapper setting-group">
+        <div className="setting-label">
+          <div className="setting-title" id="use-favicons-title">
+            Use Favicons
+          </div>
+          <div className="setting-description" id="use-favicons-description">
+            Automatically display website favicons instead of their names on bookmark dials.
+          </div>
+        </div>
+        <div className="setting-option toggle">
+          <Switch
+            aria-labelledby="use-favicons-title"
+            aria-describedby="use-favicons-description"
+            onClick={() => handleUseFavicons(!settings.useFavicons)}
+            className="switch-root"
+            checked={settings.useFavicons as boolean}
           >
             <span className="switch-thumb" />
           </Switch>

@@ -75,6 +75,7 @@ bc.onmessage = (e) => {
 
 type DialColors = Record<string, string>;
 type DialImages = Record<string, string>;
+type ManualFavicons = Record<string, string>;
 
 const defaultSettings = {
   attachTitle: false,
@@ -86,6 +87,7 @@ const defaultSettings = {
   defaultFolder: "",
   dialColors: {} as DialColors,
   dialImages: {} as DialImages,
+  manualFavicons: {} as ManualFavicons,
   dialSize: "small",
   firstRun: !lastVersion,
   maxColumns: "7",
@@ -96,6 +98,7 @@ const defaultSettings = {
   switchTitle: false,
   themeOption: "System Theme",
   transparentDials: false,
+  useFavicons: false,
   wallpaper: "",
 };
 
@@ -114,6 +117,9 @@ export const settings = makeAutoObservable({
   dialImages:
     (storage[`${apiVersion}-dial-images`] as DialImages) ||
     defaultSettings.dialImages,
+  manualFavicons:
+    (storage[`${apiVersion}-manual-favicons`] as ManualFavicons) ||
+    defaultSettings.manualFavicons,
   dialSize: storage[`${apiVersion}-dial-size`] || defaultSettings.dialSize,
   firstRun: defaultSettings.firstRun,
   maxColumns:
@@ -129,6 +135,8 @@ export const settings = makeAutoObservable({
   transparentDials:
     storage[`${apiVersion}-transparent-dials`] ??
     defaultSettings.transparentDials,
+  useFavicons:
+    storage[`${apiVersion}-use-favicons`] ?? defaultSettings.useFavicons,
   wallpaper,
   handleAttachTitle(value: boolean) {
     browser.storage.local.set({ [`${apiVersion}-attach-title`]: value });
@@ -151,6 +159,15 @@ export const settings = makeAutoObservable({
         [`${apiVersion}-dial-images`]: { ...settings.dialImages },
       });
       bc.postMessage({ dialImages: { ...settings.dialImages } });
+    }
+  },
+  handleClearManualFavicon(hostname: string) {
+    if (settings.manualFavicons[hostname]) {
+      remove(settings.manualFavicons, hostname);
+      browser.storage.local.set({
+        [`${apiVersion}-manual-favicons`]: { ...settings.manualFavicons },
+      });
+      bc.postMessage({ manualFavicons: { ...settings.manualFavicons } });
     }
   },
   handleCustomColor(value: string) {
@@ -236,6 +253,13 @@ export const settings = makeAutoObservable({
     };
     i.click();
   },
+  handleManualFavicon(hostname: string, url: string) {
+    set(settings.manualFavicons, hostname, url);
+    browser.storage.local.set({
+      [`${apiVersion}-manual-favicons`]: { ...settings.manualFavicons },
+    });
+    bc.postMessage({ manualFavicons: { ...settings.manualFavicons } });
+  },
   handleShowTitle(value: boolean) {
     browser.storage.local.set({ [`${apiVersion}-show-title`]: value });
     settings.showTitle = value;
@@ -262,6 +286,11 @@ export const settings = makeAutoObservable({
     browser.storage.local.set({ [`${apiVersion}-transparent-dials`]: value });
     settings.transparentDials = value;
     bc.postMessage({ transparentDials: value });
+  },
+  handleUseFavicons(value: boolean) {
+    browser.storage.local.set({ [`${apiVersion}-use-favicons`]: value });
+    settings.useFavicons = value;
+    bc.postMessage({ useFavicons: value });
   },
   handleWallpaper(value: string) {
     // Automatically clear custom image when switching to a different wallpaper
@@ -311,12 +340,18 @@ export const settings = makeAutoObservable({
     settings.dialImages = {};
     bc.postMessage({ dialImages: {} });
   },
+  resetManualFavicons() {
+    browser.storage.local.remove(`${apiVersion}-manual-favicons`);
+    settings.manualFavicons = {};
+    bc.postMessage({ manualFavicons: {} });
+  },
   resetSettings() {
     settings.handleAttachTitle(defaultSettings.attachTitle);
     settings._clearCustomColor();
     settings._clearCustomImage();
     settings.resetDialColors();
     settings.resetDialImages();
+    settings.resetManualFavicons();
     settings.resetWallpaper();
     settings.handleDefaultFolder(defaultSettings.defaultFolder);
     settings.handleDialSize(defaultSettings.dialSize);
@@ -327,6 +362,7 @@ export const settings = makeAutoObservable({
     settings.handleSwitchTitle(defaultSettings.switchTitle);
     settings.handleThemeOption(defaultSettings.themeOption);
     settings.handleTransparentDials(defaultSettings.transparentDials);
+    settings.handleUseFavicons(defaultSettings.useFavicons);
   },
   resetWallpaper() {
     settings.handleWallpaper(
@@ -379,6 +415,13 @@ export const settings = makeAutoObservable({
             settings.dialImages = backup.dialImages;
             bc.postMessage({ dialImages: backup.dialImages });
           }
+          if (Object.prototype.hasOwnProperty.call(backup, "manualFavicons")) {
+            browser.storage.local.set({
+              [`${apiVersion}-manual-favicons`]: backup.manualFavicons,
+            });
+            settings.manualFavicons = backup.manualFavicons;
+            bc.postMessage({ manualFavicons: backup.manualFavicons });
+          }
           if (Object.prototype.hasOwnProperty.call(backup, "dialSize")) {
             settings.handleDialSize(backup.dialSize);
           }
@@ -408,6 +451,9 @@ export const settings = makeAutoObservable({
           ) {
             settings.handleTransparentDials(backup.transparentDials);
           }
+          if (Object.prototype.hasOwnProperty.call(backup, "useFavicons")) {
+            settings.handleUseFavicons(backup.useFavicons);
+          }
         } catch (err) {
           console.error("Error parsing JSON file", err);
         }
@@ -423,6 +469,7 @@ export const settings = makeAutoObservable({
       defaultFolder: settings.defaultFolder,
       dialColors: settings.dialColors,
       dialImages: settings.dialImages,
+      manualFavicons: settings.manualFavicons,
       dialSize: settings.dialSize,
       maxColumns: settings.maxColumns,
       newTab: settings.newTab,
@@ -431,6 +478,7 @@ export const settings = makeAutoObservable({
       switchTitle: settings.switchTitle,
       themeOption: settings.themeOption,
       transparentDials: settings.transparentDials,
+      useFavicons: settings.useFavicons,
       wallpaper: settings.wallpaper,
     };
     const { [`${apiVersion}-custom-image`]: image } =

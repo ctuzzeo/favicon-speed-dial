@@ -230,6 +230,35 @@ export const ContextMenu = observer(function ContextMenu() {
               </button>
             </li>
           )}
+          {settings.useFavicons && (
+            <>
+              <li>
+                <button
+                  role="menuitem"
+                  onClick={handleShowSelectFavicon}
+                  onMouseEnter={handleMouseEnter}
+                >
+                  Select favicon
+                </button>
+              </li>
+              {settings.manualFavicons[
+                new URL(
+                  contextMenu.focusAfterClosed?.getAttribute("href") || "",
+                  window.location.href,
+                ).hostname
+              ] && (
+                <li>
+                  <button
+                    role="menuitem"
+                    onClick={handleClearManualFavicon}
+                    onMouseEnter={handleMouseEnter}
+                  >
+                    Clear manual favicon
+                  </button>
+                </li>
+              )}
+            </>
+          )}
           <Separator />
           <li>
             <button
@@ -401,6 +430,15 @@ function handleClearThumbnail() {
   }
 }
 
+function handleClearManualFavicon() {
+  contextMenu.closeContextMenu();
+  const url = contextMenu.focusAfterClosed?.getAttribute("href");
+  if (url) {
+    const hostname = new URL(url, window.location.href).hostname;
+    settings.handleClearManualFavicon(hostname);
+  }
+}
+
 function handleCopyURL() {
   contextMenu.closeContextMenu();
   const element = contextMenu.focusAfterClosed as HTMLAnchorElement;
@@ -471,6 +509,15 @@ function handleSelectThumbnail() {
   if (contextMenu.focusAfterClosed?.dataset.id) {
     settings.handleSelectThumbnail(contextMenu.focusAfterClosed.dataset.id);
   }
+}
+
+function handleShowSelectFavicon() {
+  modals.openModal({
+    modal: "select-favicon",
+    editingBookmarkId: contextMenu.focusAfterClosed?.dataset.id || null,
+    focusAfterClosed: contextMenu.focusAfterClosed || null,
+  });
+  contextMenu.closeContextMenu({ focusAfterClosed: false });
 }
 
 function handleShowAbout() {
