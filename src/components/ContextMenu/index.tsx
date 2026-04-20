@@ -230,34 +230,30 @@ export const ContextMenu = observer(function ContextMenu() {
               </button>
             </li>
           )}
-          {settings.useFavicons && (
-            <>
-              <li>
-                <button
-                  role="menuitem"
-                  onClick={handleShowSelectFavicon}
-                  onMouseEnter={handleMouseEnter}
-                >
-                  Select favicon
-                </button>
-              </li>
-              {settings.manualFavicons[
-                new URL(
-                  contextMenu.focusAfterClosed?.getAttribute("href") || "",
-                  window.location.href,
-                ).hostname
-              ] && (
-                <li>
-                  <button
-                    role="menuitem"
-                    onClick={handleClearManualFavicon}
-                    onMouseEnter={handleMouseEnter}
-                  >
-                    Clear manual favicon
-                  </button>
-                </li>
-              )}
-            </>
+          <li>
+            <button
+              role="menuitem"
+              onClick={handleShowSelectFavicon}
+              onMouseEnter={handleMouseEnter}
+            >
+              Select favicon
+            </button>
+          </li>
+          {settings.manualFavicons[
+            new URL(
+              contextMenu.focusAfterClosed?.getAttribute("href") || "",
+              window.location.href,
+            ).hostname
+          ] && (
+            <li>
+              <button
+                role="menuitem"
+                onClick={handleClearManualFavicon}
+                onMouseEnter={handleMouseEnter}
+              >
+                Clear manual favicon
+              </button>
+            </li>
           )}
           <Separator />
           <li>

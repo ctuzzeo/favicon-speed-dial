@@ -102,7 +102,6 @@
   --title-height: 1.5em;
   --dial-height-value: 10.25; /* Square: 164px */
   --dial-height: calc(var(--dial-height-value) * 1em);
-  --dial-height-attached-title: calc(var(--dial-width) - var(--title-height));
   display: grid;
   grid-template-columns: repeat(auto-fill, var(--dial-width));
   row-gap: var(--grid-row-gap);

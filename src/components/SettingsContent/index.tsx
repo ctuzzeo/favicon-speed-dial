@@ -15,20 +15,16 @@ import { Switch } from "./Switch.tsx";
 
 export const SettingsContent = observer(function SettingsContent() {
   const {
-    handleAttachTitle,
     handleCustomColor,
     handleCustomImage,
     handleDefaultFolder,
     handleDialSize,
     handleMaxColumns,
     handleNewTab,
-    handleShowTitle,
     handleColumnGap,
     handleRowGap,
-    handleSwitchTitle,
+    handleTitleOpacity,
     handleThemeOption,
-    handleTransparentDials,
-    handleUseFavicons,
     handleWallpaper,
     resetSettings,
     restoreFromJSON,
@@ -207,9 +203,7 @@ export const SettingsContent = observer(function SettingsContent() {
             Color Scheme
           </div>
           <div className="setting-description" id="color-scheme-description">
-            Choose the color scheme for Easy Speed Dial. If set to
-            &quot;Automatic,&quot; it will follow your system&apos;s light or
-            dark mode preference.
+            Choose the color scheme for Easy Speed Dial.
           </div>
         </div>
         <div className="setting-option select">
@@ -256,8 +250,7 @@ export const SettingsContent = observer(function SettingsContent() {
             Maximum Columns
           </div>
           <div className="setting-description" id="max-cols-description">
-            Choose the maximum number of columns to display based on your screen
-            size.
+            Choose the maximum number of columns to display.
           </div>
         </div>
         <div className="setting-option select">
@@ -269,19 +262,7 @@ export const SettingsContent = observer(function SettingsContent() {
             aria-describedby="max-cols-description"
           >
             {[
-              "1",
-              "2",
-              "3",
-              "4",
-              "5",
-              "6",
-              "7",
-              "8",
-              "9",
-              "10",
-              "11",
-              "12",
-              "Unlimited",
+              "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "Unlimited",
             ].map((n) => (
               <option value={n} key={n}>
                 {n}
@@ -372,111 +353,25 @@ export const SettingsContent = observer(function SettingsContent() {
       </div>
       <div className="setting-wrapper setting-group">
         <div className="setting-label">
-          <div className="setting-title" id="transparent-dials-title">
-            Transparent Dials
+          <div className="setting-title" id="title-opacity-title">
+            Title Background Opacity
           </div>
-          <div
-            className="setting-description"
-            id="transparent-dials-description"
-          >
-            Make all dial backgrounds transparent to show the background image
-            behind them.
+          <div className="setting-description" id="title-opacity-description">
+            Adjust the transparency of the bookmark title backgrounds.
           </div>
         </div>
-        <div className="setting-option toggle">
-          <Switch
-            aria-labelledby="transparent-dials-title"
-            aria-describedby="transparent-dials-description"
-            onClick={() => handleTransparentDials(!settings.transparentDials)}
-            className="switch-root"
-            checked={settings.transparentDials as boolean}
-          >
-            <span className="switch-thumb" />
-          </Switch>
-        </div>
-      </div>
-      <div className="setting-wrapper setting-group">
-        <div className="setting-label">
-          <div className="setting-title" id="use-favicons-title">
-            Use Favicons
-          </div>
-          <div className="setting-description" id="use-favicons-description">
-            Automatically display website favicons instead of their names on bookmark dials.
-          </div>
-        </div>
-        <div className="setting-option toggle">
-          <Switch
-            aria-labelledby="use-favicons-title"
-            aria-describedby="use-favicons-description"
-            onClick={() => handleUseFavicons(!settings.useFavicons)}
-            className="switch-root"
-            checked={settings.useFavicons as boolean}
-          >
-            <span className="switch-thumb" />
-          </Switch>
-        </div>
-      </div>
-      <div className="setting-wrapper setting-group">
-        <div className="setting-label">
-          <div className="setting-title" id="show-title-title">
-            Show Title
-          </div>
-          <div className="setting-description" id="show-title-description">
-            Display the bookmark&apos;s title below the dial.
-          </div>
-        </div>
-        <div className="setting-option toggle">
-          <Switch
-            aria-labelledby="show-title-title"
-            aria-describedby="show-title-description"
-            onClick={() => handleShowTitle(!settings.showTitle)}
-            className="switch-root"
-            checked={settings.showTitle as boolean}
-          >
-            <span className="switch-thumb" />
-          </Switch>
-        </div>
-      </div>
-      <div className="setting-wrapper setting-group">
-        <div className="setting-label">
-          <div className="setting-title" id="switch-title-title">
-            Switch Title and URL
-          </div>
-          <div className="setting-description" id="switch-title-description">
-            Show the bookmark&apos;s title in the dial instead of the URL.
-          </div>
-        </div>
-        <div className="setting-option toggle">
-          <Switch
-            aria-labelledby="switch-title-title"
-            aria-describedby="switch-title-description"
-            onClick={() => handleSwitchTitle(!settings.switchTitle)}
-            className="switch-root"
-            checked={settings.switchTitle as boolean}
-          >
-            <span className="switch-thumb" />
-          </Switch>
-        </div>
-      </div>
-      <div className="setting-wrapper setting-group">
-        <div className="setting-label">
-          <div className="setting-title" id="attach-title-title">
-            Attach Title to Dial
-          </div>
-          <div className="setting-description" id="attach-title-description">
-            Remove spacing between the title and dial, connecting them directly.
-          </div>
-        </div>
-        <div className="setting-option toggle">
-          <Switch
-            aria-labelledby="attach-title-title"
-            aria-describedby="attach-title-description"
-            onClick={() => handleAttachTitle(!settings.attachTitle)}
-            className="switch-root"
-            checked={settings.attachTitle as boolean}
-          >
-            <span className="switch-thumb" />
-          </Switch>
+        <div className="setting-option slider">
+          <input
+            type="range"
+            min="0"
+            max="1"
+            step="0.01"
+            value={settings.titleOpacity}
+            onChange={(e) => handleTitleOpacity(parseFloat(e.target.value))}
+            aria-labelledby="title-opacity-title"
+            aria-describedby="title-opacity-description"
+          />
+          <span className="slider-value">{Math.round(settings.titleOpacity * 100)}%</span>
         </div>
       </div>
       <div className="setting-wrapper setting-group">
@@ -484,47 +379,30 @@ export const SettingsContent = observer(function SettingsContent() {
           <div className="setting-title" id="reset-backup-restore-title">
             Backup and Restore
           </div>
-          <div
-            className="setting-description"
-            id="reset-backup-restore-description"
-          >
-            Save a file with all your settings, including custom background
-            image/color and dial images/colors. Restoring a backup will replace
-            your current settings.
+          <div className="setting-description" id="reset-backup-restore-description">
+            Save a file with all your settings.
           </div>
         </div>
         <div className="setting-option backup-restore">
           <button type="button" className="btn defaultBtn" onClick={saveToJSON}>
             Backup
           </button>
-          <button
-            type="button"
-            className="btn defaultBtn"
-            onClick={restoreFromJSON}
-          >
+          <button type="button" className="btn defaultBtn" onClick={restoreFromJSON}>
             Restore
           </button>
         </div>
       </div>
       <div className="setting-wrapper setting-group">
         <div className="setting-label">
-          <div className="setting-title" id="reset-backup-restore-title">
+          <div className="setting-title" id="reset-settings-title">
             Reset Settings
           </div>
-          <div
-            className="setting-description"
-            id="reset-backup-restore-description"
-          >
-            Reset all settings to their defaults. Custom background image/color
-            and dial images/colors will be cleared. This cannot be undone.
+          <div className="setting-description" id="reset-settings-description">
+            Reset all settings to their defaults.
           </div>
         </div>
         <div className="setting-option reset">
-          <button
-            type="button"
-            className="btn defaultBtn"
-            onClick={resetSettings}
-          >
+          <button type="button" className="btn defaultBtn" onClick={resetSettings}>
             Reset
           </button>
         </div>

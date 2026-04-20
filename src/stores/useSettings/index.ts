@@ -14,12 +14,6 @@ const appVersion = __APP_VERSION__;
 const apiVersion = "2.0";
 
 async function getCustomImage() {
-  /*
-   * IndexedDB storage allows images to be stored as blob.
-   * Chrome storage requires blobs to be converted to base64.
-   * Firefox storage allows images to be stored as blob.
-   * This store always converts to base64 to avoid multiple implementations.
-   */
   try {
     const { [`${apiVersion}-custom-image`]: image } =
       await browser.storage.local.get(`${apiVersion}-custom-image`);
@@ -78,7 +72,6 @@ type DialImages = Record<string, string>;
 type ManualFavicons = Record<string, string>;
 
 const defaultSettings = {
-  attachTitle: false,
   colorScheme: window.matchMedia("(prefers-color-scheme: dark)").matches
     ? "color-scheme-dark"
     : "color-scheme-light",
@@ -93,20 +86,15 @@ const defaultSettings = {
   maxColumns: "7",
   newTab: false,
   showAlertBanner: !lastVersion || isUpgrade,
-  showTitle: true,
   squareDials: true,
   columnGap: 28,
   rowGap: 28,
-  switchTitle: false,
+  titleOpacity: 0.75,
   themeOption: "System Theme",
-  transparentDials: false,
-  useFavicons: false,
   wallpaper: "",
 };
 
 export const settings = makeAutoObservable({
-  attachTitle:
-    storage[`${apiVersion}-attach-title`] ?? defaultSettings.attachTitle,
   colorScheme,
   customColor:
     storage[`${apiVersion}-custom-color`] || defaultSettings.customColor,
@@ -128,24 +116,13 @@ export const settings = makeAutoObservable({
     storage[`${apiVersion}-max-columns`] || defaultSettings.maxColumns,
   newTab: storage[`${apiVersion}-new-tab`] ?? defaultSettings.newTab,
   showAlertBanner: defaultSettings.showAlertBanner,
-  showTitle: storage[`${apiVersion}-show-title`] ?? defaultSettings.showTitle,
   squareDials: true,
   columnGap: storage[`${apiVersion}-column-gap`] || defaultSettings.columnGap,
   rowGap: storage[`${apiVersion}-row-gap`] || defaultSettings.rowGap,
-  switchTitle:
-    storage[`${apiVersion}-switch-title`] ?? defaultSettings.switchTitle,
+  titleOpacity:
+    storage[`${apiVersion}-title-opacity`] ?? defaultSettings.titleOpacity,
   themeOption,
-  transparentDials:
-    storage[`${apiVersion}-transparent-dials`] ??
-    defaultSettings.transparentDials,
-  useFavicons:
-    storage[`${apiVersion}-use-favicons`] ?? defaultSettings.useFavicons,
   wallpaper,
-  handleAttachTitle(value: boolean) {
-    browser.storage.local.set({ [`${apiVersion}-attach-title`]: value });
-    settings.attachTitle = value;
-    bc.postMessage({ attachTitle: value });
-  },
   handleClearColor(id: string) {
     if (settings.dialColors[id]) {
       remove(settings.dialColors, id);
@@ -238,6 +215,11 @@ export const settings = makeAutoObservable({
     settings.columnGap = value;
     bc.postMessage({ columnGap: value });
   },
+  handleTitleOpacity(value: number) {
+    browser.storage.local.set({ [`${apiVersion}-title-opacity`]: value });
+    settings.titleOpacity = value;
+    bc.postMessage({ titleOpacity: value });
+  },
   handleNewTab(value: boolean) {
     browser.storage.local.set({ [`${apiVersion}-new-tab`]: value });
     settings.newTab = value;
@@ -262,375 +244,76 @@ export const settings = makeAutoObservable({
       browser.storage.local.set({
         [`${apiVersion}-dial-images`]: { ...settings.dialImages },
       });
-      bc.postMessage({ dialImages: { ...settings.dialImages } });
+      bc.postMessage({
+        dialImages: { ...settings.dialImages },
+      });
     };
     i.click();
-  },
-  handleManualFavicon(hostname: string, url: string) {
-    set(settings.manualFavicons, hostname, url);
-    browser.storage.local.set({
-      [`${apiVersion}-manual-favicons`]: { ...settings.manualFavicons },
-    });
-    bc.postMessage({ manualFavicons: { ...settings.manualFavicons } });
-  },
-  handleShowTitle(value: boolean) {
-    browser.storage.local.set({ [`${apiVersion}-show-title`]: value });
-    settings.showTitle = value;
-    bc.postMessage({ showTitle: value });
-  },
-  handleSwitchTitle(value: boolean) {
-    browser.storage.local.set({ [`${apiVersion}-switch-title`]: value });
-    settings.switchTitle = value;
-    bc.postMessage({ switchTitle: value });
-  },
-  handleSquareDials(value: boolean) {
-    browser.storage.local.set({ [`${apiVersion}-square-dials`]: value });
-    settings.squareDials = value;
-    bc.postMessage({ squareDials: value });
   },
   handleThemeOption(value: string) {
     browser.storage.local.set({ [`${apiVersion}-theme-option`]: value });
     settings.themeOption = value;
     settings.colorScheme = getColorScheme(value);
-    settings.toggleThemeBackground(settings.colorScheme);
-    bc.postMessage({ colorScheme: settings.colorScheme, themeOption: value });
-  },
-  handleTransparentDials(value: boolean) {
-    browser.storage.local.set({ [`${apiVersion}-transparent-dials`]: value });
-    settings.transparentDials = value;
-    bc.postMessage({ transparentDials: value });
-  },
-  handleUseFavicons(value: boolean) {
-    browser.storage.local.set({ [`${apiVersion}-use-favicons`]: value });
-    settings.useFavicons = value;
-    bc.postMessage({ useFavicons: value });
+    bc.postMessage({
+      themeOption: value,
+      colorScheme: settings.colorScheme,
+    });
   },
   handleWallpaper(value: string) {
-    // Automatically clear custom image when switching to a different wallpaper
-    if (value !== "custom-image" && settings.wallpaper === "custom-image") {
-      settings._clearCustomImage();
-    }
-    // Automatically clear custom color when switching to a different wallpaper
-    if (value !== "custom-color" && settings.wallpaper === "custom-color") {
-      settings._clearCustomColor();
-    }
     browser.storage.local.set({ [`${apiVersion}-wallpaper`]: value });
     settings.wallpaper = value;
     bc.postMessage({ wallpaper: value });
   },
-  _restoreWallpaper(value: string) {
-    // Internal method for restoring wallpaper without clearing custom image/color
-    browser.storage.local.set({ [`${apiVersion}-wallpaper`]: value });
-    settings.wallpaper = value;
-    bc.postMessage({ wallpaper: value });
+  async resetSettings() {
+    await browser.storage.local.clear();
+    location.reload();
   },
-  _restoreCustomColor(value: string) {
-    // Internal method for restoring custom color without triggering wallpaper change
-    browser.storage.local.set({ [`${apiVersion}-custom-color`]: value });
-    settings.customColor = value;
-    bc.postMessage({ customColor: value });
-  },
-  hideAlertBanner() {
-    settings.showAlertBanner = false;
-  },
-  _clearCustomImage() {
-    browser.storage.local.remove([`${apiVersion}-custom-image`]);
-    settings.customImage = "";
-    bc.postMessage({ customImage: "" });
-  },
-  _clearCustomColor() {
-    browser.storage.local.set({ [`${apiVersion}-custom-color`]: "" });
-    settings.customColor = "";
-    bc.postMessage({ customColor: "" });
-  },
-  resetDialColors() {
-    browser.storage.local.set({ [`${apiVersion}-dial-colors`]: {} });
-    settings.dialColors = {};
-    bc.postMessage({ dialColors: {} });
-  },
-  resetDialImages() {
-    browser.storage.local.remove(`${apiVersion}-dial-images`);
-    settings.dialImages = {};
-    bc.postMessage({ dialImages: {} });
-  },
-  resetManualFavicons() {
-    browser.storage.local.remove(`${apiVersion}-manual-favicons`);
-    settings.manualFavicons = {};
-    bc.postMessage({ manualFavicons: {} });
-  },
-  resetSettings() {
-    settings.handleAttachTitle(defaultSettings.attachTitle);
-    settings._clearCustomColor();
-    settings._clearCustomImage();
-    settings.resetDialColors();
-    settings.resetDialImages();
-    settings.resetManualFavicons();
-    settings.resetWallpaper();
-    settings.handleDefaultFolder(defaultSettings.defaultFolder);
-    settings.handleDialSize(defaultSettings.dialSize);
-    settings.handleMaxColumns(defaultSettings.maxColumns);
-    settings.handleNewTab(defaultSettings.newTab);
-    settings.handleShowTitle(defaultSettings.showTitle);
-    settings.handleSquareDials(defaultSettings.squareDials);
-    settings.handleSwitchTitle(defaultSettings.switchTitle);
-    settings.handleThemeOption(defaultSettings.themeOption);
-    settings.handleTransparentDials(defaultSettings.transparentDials);
-    settings.handleUseFavicons(defaultSettings.useFavicons);
-  },
-  resetWallpaper() {
-    settings.handleWallpaper(
-      prefersDarkMode() ? "dark-wallpaper" : "light-wallpaper",
-    );
+  saveToJSON() {
+    const data = JSON.stringify(storage);
+    const blob = new Blob([data], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `easy-speed-dial-backup-${new Date().toISOString()}.json`;
+    a.click();
   },
   restoreFromJSON() {
     const i = document.createElement("input");
     i.type = "File";
-    i.accept = ".json";
-    i.onchange = (e: Event) => {
+    i.accept = "application/json";
+    i.onchange = async (e: Event) => {
       const target = e.target as HTMLInputElement;
+      const file = target.files?.[0];
+      if (!file) return;
       const reader = new FileReader();
-      reader.readAsText(target.files![0]);
-      reader.onload = async (e: ProgressEvent<FileReader>) => {
-        try {
-          const result = e.target?.result;
-          if (typeof result !== "string") return;
-          const backup = JSON.parse(result);
-          settings.resetSettings();
-          if (backup.customImage) {
-            const image = base64ToBlob(backup.customImage);
-            await browser.storage.local.set({
-              [`${apiVersion}-custom-image`]: backup.customImage,
-            });
-            const imageURI = URL.createObjectURL(image);
-            settings.customImage = imageURI;
-            bc.postMessage({ customImage: imageURI });
-          }
-          if (Object.prototype.hasOwnProperty.call(backup, "attachTitle")) {
-            settings.handleAttachTitle(backup.attachTitle);
-          }
-          if (Object.prototype.hasOwnProperty.call(backup, "customColor")) {
-            settings._restoreCustomColor(backup.customColor);
-          }
-          if (Object.prototype.hasOwnProperty.call(backup, "defaultFolder")) {
-            settings.handleDefaultFolder(backup.defaultFolder);
-          }
-          if (Object.prototype.hasOwnProperty.call(backup, "dialColors")) {
-            browser.storage.local.set({
-              [`${apiVersion}-dial-colors`]: backup.dialColors,
-            });
-            settings.dialColors = backup.dialColors;
-            bc.postMessage({ dialColors: backup.dialColors });
-          }
-          if (Object.prototype.hasOwnProperty.call(backup, "dialImages")) {
-            browser.storage.local.set({
-              [`${apiVersion}-dial-images`]: backup.dialImages,
-            });
-            settings.dialImages = backup.dialImages;
-            bc.postMessage({ dialImages: backup.dialImages });
-          }
-          if (Object.prototype.hasOwnProperty.call(backup, "manualFavicons")) {
-            browser.storage.local.set({
-              [`${apiVersion}-manual-favicons`]: backup.manualFavicons,
-            });
-            settings.manualFavicons = backup.manualFavicons;
-            bc.postMessage({ manualFavicons: backup.manualFavicons });
-          }
-          if (Object.prototype.hasOwnProperty.call(backup, "dialSize")) {
-            settings.handleDialSize(backup.dialSize);
-          }
-          if (Object.prototype.hasOwnProperty.call(backup, "maxColumns")) {
-            settings.handleMaxColumns(backup.maxColumns);
-          }
-          if (Object.prototype.hasOwnProperty.call(backup, "newTab")) {
-            settings.handleNewTab(backup.newTab);
-          }
-          if (Object.prototype.hasOwnProperty.call(backup, "showTitle")) {
-            settings.handleShowTitle(backup.showTitle);
-          }
-          if (Object.prototype.hasOwnProperty.call(backup, "squareDials")) {
-            settings.handleSquareDials(backup.squareDials);
-          }
-          if (Object.prototype.hasOwnProperty.call(backup, "switchTitle")) {
-            settings.handleSwitchTitle(backup.switchTitle);
-          }
-          if (Object.prototype.hasOwnProperty.call(backup, "wallpaper")) {
-            settings._restoreWallpaper(backup.wallpaper);
-          }
-          if (Object.prototype.hasOwnProperty.call(backup, "themeOption")) {
-            settings.handleThemeOption(backup.themeOption);
-          }
-          if (
-            Object.prototype.hasOwnProperty.call(backup, "transparentDials")
-          ) {
-            settings.handleTransparentDials(backup.transparentDials);
-          }
-          if (Object.prototype.hasOwnProperty.call(backup, "useFavicons")) {
-            settings.handleUseFavicons(backup.useFavicons);
-          }
-        } catch (err) {
-          console.error("Error parsing JSON file", err);
-        }
+      reader.onload = async (e) => {
+        const data = JSON.parse(e.target?.result as string);
+        await browser.storage.local.clear();
+        await browser.storage.local.set(data);
+        location.reload();
       };
+      reader.readAsText(file);
     };
     i.click();
   },
-  async saveToJSON() {
-    const backup = {
-      attachTitle: settings.attachTitle,
-      customColor: settings.customColor,
-      customImage: settings.customImage,
-      defaultFolder: settings.defaultFolder,
-      dialColors: settings.dialColors,
-      dialImages: settings.dialImages,
-      manualFavicons: settings.manualFavicons,
-      dialSize: settings.dialSize,
-      maxColumns: settings.maxColumns,
-      newTab: settings.newTab,
-      showTitle: settings.showTitle,
-      squareDials: settings.squareDials,
-      switchTitle: settings.switchTitle,
-      themeOption: settings.themeOption,
-      transparentDials: settings.transparentDials,
-      useFavicons: settings.useFavicons,
-      wallpaper: settings.wallpaper,
-    };
-    const { [`${apiVersion}-custom-image`]: image } =
-      await browser.storage.local.get(`${apiVersion}-custom-image`);
-    if (image && typeof image === "string") {
-      backup.customImage = image;
-    }
-    downloadBackup(backup);
-  },
-  toggleThemeBackground(scheme: string) {
-    const wallpaperMap = {
-      "color-scheme-light": {
-        "dark-wallpaper": "light-wallpaper",
-        "light-wallpaper": "light-wallpaper",
-        HorizonDark: "HorizonLight",
-        HorizonLight: "HorizonLight",
-        DesertDay: "DesertDay",
-        DesertNight: "DesertDay",
-      },
-      "color-scheme-dark": {
-        "dark-wallpaper": "dark-wallpaper",
-        "light-wallpaper": "dark-wallpaper",
-        HorizonDark: "HorizonDark",
-        HorizonLight: "HorizonDark",
-        DesertDay: "DesertNight",
-        DesertNight: "DesertNight",
-      },
-    };
-    const schemeMap = wallpaperMap[scheme as keyof typeof wallpaperMap];
-    const wallpaper = schemeMap?.[settings.wallpaper as keyof typeof schemeMap];
-    if (wallpaper) {
-      settings.handleWallpaper(wallpaper);
-    }
-  },
-  systemThemeChanged(e: MediaQueryListEvent) {
-    if (settings.themeOption === "System Theme") {
-      settings.colorScheme = e.matches
-        ? "color-scheme-dark"
-        : "color-scheme-light";
-      settings.toggleThemeBackground(settings.colorScheme);
-    }
-  },
 });
 
-// ==================================================================
-// TOGGLE THEME/BACKGROUND
-// ==================================================================
-// Listen for system theme changes and update settings accordingly.
-window
-  .matchMedia("(prefers-color-scheme: dark)")
-  .addEventListener("change", settings.systemThemeChanged);
-
-// ==================================================================
-// DIALS FROM DEMO BOOKMARKS
-// ==================================================================
-// If running in demo mode, populate dial colors and images from mock bookmarks.
-if (__DEMO__) {
-  mockBookmarks.forEach((b) => {
-    settings.dialColors[b[2]] = b[3];
-    settings.dialImages[b[2]] = b[4];
-  });
-}
-
-// ==================================================================
-// CLASSNAMES FROM SETTINGS
-// ==================================================================
-// Dynamically update document class names and background based on settings.
-const userAgent = navigator.userAgent.toLowerCase();
-const isMacOS = userAgent.includes("macintosh");
-const isChrome = userAgent.includes("chrome");
-
-autorun(() => {
-  document.documentElement.className = clsx(
-    settings.colorScheme as string,
-    settings.wallpaper as string,
-    "Wallpapers",
-    isChrome ? "chrome" : "firefox",
-    isMacOS ? "mac" : "windows",
-    settings.showTitle ? "show-title" : "hide-title",
-    settings.attachTitle ? "attach-title" : "normal-title",
-    settings.dialSize,
-    settings.maxColumns === "Unlimited" ? "unlimited-columns" : undefined,
-    settings.squareDials ? "square" : undefined,
-    settings.transparentDials ? "transparent-dials" : undefined,
-  );
-  document.documentElement.style.backgroundImage =
-    settings.wallpaper === "custom-image" && settings.customImage
-      ? `url(${settings.customImage})`
-      : "";
-  document.documentElement.style.setProperty(
-    "--background-color",
-    settings.wallpaper === "custom-color"
-      ? (settings.customColor as string | null)
-      : null,
-  );
-});
-
-// ==================================================================
-// BACKUP/RESTORE HELPERS
-// ==================================================================
-// Utility to convert a base64 string to a Blob object.
 function base64ToBlob(base64: string) {
-  const contentType = base64.match(/data:([^;]+);base64,/)?.[1];
-  if (!contentType) throw new Error("Invalid base64 format");
-  const base64Data = base64.replace(/data:([^;]+);base64,/, "");
-  const binaryData = atob(base64Data);
-  const length = binaryData.length;
-  const uint8Array = new Uint8Array(length);
-
-  for (let i = 0; i < length; i++) {
-    uint8Array[i] = binaryData.charCodeAt(i);
+  const byteString = atob(base64.split(",")[1]);
+  const mimeString = base64.split(",")[0].split(":")[1].split(";")[0];
+  const ab = new ArrayBuffer(byteString.length);
+  const ia = new Uint8Array(ab);
+  for (let i = 0; i < byteString.length; i++) {
+    ia[i] = byteString.charCodeAt(i);
   }
-
-  return new Blob([uint8Array], { type: contentType });
+  return new Blob([ab], { type: mimeString });
 }
 
-// Utility to convert a Blob object to a base64 string.
 function blobToBase64(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.onerror = reject;
     reader.readAsDataURL(blob);
-    reader.onloadend = () => {
-      if (typeof reader.result === "string") {
-        resolve(reader.result);
-      } else {
-        reject(new Error("Failed to read file as string"));
-      }
-    };
-    reader.onerror = (error) => reject(error);
   });
-}
-
-// Utility to trigger a download of a JSON backup file.
-function downloadBackup(obj: Record<string, unknown>) {
-  const dataStr = `data:text/plain;charset=utf-8,${encodeURIComponent(
-    JSON.stringify(obj),
-  )}`;
-  const a = document.createElement("a");
-  a.href = dataStr;
-  a.download = "easy-backup.json";
-  a.click();
 }

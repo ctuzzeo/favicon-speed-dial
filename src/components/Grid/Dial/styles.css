@@ -6,20 +6,6 @@
   text-decoration: none;
   cursor: pointer;
   outline: none;
-
-  .attach-title & {
-    box-shadow: var(--dial-box-shadow);
-    border-radius: var(--border-radius);
-
-    &:focus-visible:is(a) {
-      outline: 5px solid #1976d2;
-      outline-offset: 1px;
-
-      .color-scheme-dark & {
-        outline-color: #90caf9;
-      }
-    }
-  }
 }
 
 .Box {
@@ -32,6 +18,7 @@
   font-weight: 500;
   overflow: hidden;
   pointer-events: none;
+  box-shadow: var(--dial-box-shadow);
 
   .folder {
     width: 5em; /* 80px */
@@ -39,27 +26,13 @@
     fill: #fff;
   }
 
-  .normal-title & {
-    box-shadow: var(--dial-box-shadow);
+  &:focus-visible:is(a) {
+    outline: 5px solid #1976d2;
+    outline-offset: 1px;
 
-    :focus-visible:is(a) & {
-      outline: 5px solid #1976d2;
-      outline-offset: 1px;
-
-      .color-scheme-dark & {
-        outline-color: #90caf9;
-      }
+    .color-scheme-dark & {
+      outline-color: #90caf9;
     }
-  }
-
-  .show-title.attach-title & {
-    border-radius: var(--border-radius) var(--border-radius) 0 0;
-  }
-
-  height: var(--dial-height);
-
-  .attach-title & {
-    height: var(--dial-height-attached-title);
   }
 }
 
@@ -97,11 +70,6 @@
   display: grid;
   place-content: center;
 
-  .attach-title & {
-    padding-top: 0;
-    display: block;
-  }
-
   .title {
     border-radius: 0.625em;
     max-width: 100%;
@@ -119,17 +87,13 @@
     }
 
     .color-scheme-light & {
-      background-color: rgba(255, 255, 255, 0.75);
+      background-color: rgba(255, 255, 255, var(--title-opacity, 0.75));
       color: #373737;
     }
 
     .color-scheme-dark & {
-      background-color: rgba(55, 55, 55, 0.75);
+      background-color: rgba(55, 55, 55, var(--title-opacity, 0.75));
       color: #eeeeee;
-    }
-
-    .attach-title & {
-      border-radius: 0 0 var(--border-radius) var(--border-radius);
     }
 
     :focus-visible:is(a) & {

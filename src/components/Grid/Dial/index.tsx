@@ -38,23 +38,15 @@ interface TitleProps {
 
 export const Dial = observer(function Dial(props: DialProps) {
   const backgroundColor = settings.dialColors[props.id]
-    ? settings.transparentDials
-      ? addOpacity(settings.dialColors[props.id], 0.75)
-      : settings.dialColors[props.id]
-    : settings.transparentDials
-      ? addOpacity(dialColors(props.name), 0.75)
-      : dialColors(props.name);
+    ? settings.dialColors[props.id]
+    : dialColors(props.name);
   const backgroundImage = settings.dialImages[props.id];
 
   const nameFallback = (
     <div>
       <Name
         {...{
-          name: settings.switchTitle
-            ? props.title
-              ? [props.title]
-              : [props.name.join(".")]
-            : props.name,
+          name: props.name,
         }}
       />
     </div>
@@ -90,14 +82,10 @@ export const Dial = observer(function Dial(props: DialProps) {
       >
         {!settings.dialImages[props.id] &&
           (props.type === "bookmark" ? (
-            settings.useFavicons ? (
-              <Favicon
-                url={props.url}
-                fallback={nameFallback}
-              />
-            ) : (
-              nameFallback
-            )
+            <Favicon
+              url={props.url}
+              fallback={nameFallback}
+            />
           ) : (
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -135,7 +123,6 @@ const Favicon = observer(function Favicon({
       return;
     }
 
-    // If there's a manually selected favicon, use it immediately
     if (settings.manualFavicons[hostname]) {
       setBestUrl(settings.manualFavicons[hostname]);
       return;
@@ -155,13 +142,9 @@ const Favicon = observer(function Favicon({
           setBestUrl("");
           return;
         }
-
         const googles = results.filter((r) => r.type === "google");
         const natives = results.filter((r) => r.type === "native");
-
-        // Prefer Google S2 (the 128x128 version), fall back to native cache
         const chosen = googles[0] || natives[0];
-
         setBestUrl(chosen?.url || "");
       }
     };
@@ -189,7 +172,6 @@ const Favicon = observer(function Favicon({
     };
   }, [url, hostname, settings.manualFavicons[hostname]]);
 
-  // Return nothing while evaluating to prevent flicker
   if (bestUrl === null) return null;
   if (bestUrl === "") return <>{fallback}</>;
 
@@ -274,7 +256,6 @@ function Domain(props: DomainProps) {
       const boxWidth = boxElement.offsetWidth;
       const boxHeight = boxElement.offsetHeight;
 
-      // Scale relative to Box size
       const maxWidth = boxWidth * 0.92;
       const maxHeight = boxHeight * 0.92;
 
@@ -288,15 +269,12 @@ function Domain(props: DomainProps) {
       setScale(newScale);
     };
 
-    // Use ResizeObserver to ensure we calculate after layout is complete
     const resizeObserver = new ResizeObserver(() => {
       calculateScale();
     });
 
     resizeObserver.observe(domainElement);
     resizeObserver.observe(boxElement);
-
-    // Also calculate immediately in case dimensions are already stable
     calculateScale();
 
     return () => {
@@ -325,15 +303,16 @@ function Domain(props: DomainProps) {
 }
 
 const Title = observer(function Title(props: TitleProps) {
-  if (!settings.showTitle) return;
-
   return (
     <div className="Title">
-      <div className="title">
+      <div 
+        className="title"
+        style={{
+          "--title-opacity": settings.titleOpacity,
+        } as React.CSSProperties}
+      >
         <div>
-          {settings.switchTitle || !props.title
-            ? props.name.join(".")
-            : props.title}
+          {props.title || props.name.join(".")}
         </div>
       </div>
     </div>
