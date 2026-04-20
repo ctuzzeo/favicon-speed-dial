@@ -52,11 +52,13 @@
     }
   }
 
-  .attach-title.show-title & {
+  .show-title.attach-title & {
     border-radius: var(--border-radius) var(--border-radius) 0 0;
   }
 
-  .square & {
+  height: var(--dial-height);
+
+  .attach-title & {
     height: var(--dial-height-attached-title);
   }
 }

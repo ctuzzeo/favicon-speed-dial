@@ -91,22 +91,22 @@
 }
 
 .Grid {
-  --dial-width-value: 12.125; /* 194px */
+  --dial-width-value: 10.25; /* Square: 164px */
   --dial-width: calc(var(--dial-width-value) * 1em);
-  --grid-gap-value: 1.75; /* 28px */
-  --grid-gap: calc(var(--grid-gap-value) * 1em);
+  --grid-row-gap: var(--grid-row-gap-setting, 28px);
+  --grid-column-gap: var(--grid-column-gap-setting, 28px);
   --grid-padding: 50px;
   --max-small-width: calc(
     var(--dial-width) * 0.92
   ); /* for <Small> padding when scaling <Domain> */
   --title-height: 1.5em;
-  --dial-height-value: 8.125; /* 130px */
+  --dial-height-value: 10.25; /* Square: 164px */
   --dial-height: calc(var(--dial-height-value) * 1em);
   --dial-height-attached-title: calc(var(--dial-width) - var(--title-height));
   display: grid;
-  grid-template-columns: repeat(auto-fill, var(--dial-width)); /* 194px */
-  row-gap: var(--grid-gap);
-  column-gap: var(--grid-gap);
+  grid-template-columns: repeat(auto-fill, var(--dial-width));
+  row-gap: var(--grid-row-gap);
+  column-gap: var(--grid-column-gap);
   justify-content: center;
   margin-inline: auto;
   padding: 80px var(--grid-padding);
@@ -120,7 +120,7 @@
     max-width: calc(
       (
           var(--grid-max-cols) * var(--dial-width) +
-            (var(--grid-max-cols) - 1) * var(--grid-gap)
+            (var(--grid-max-cols) - 1) * var(--grid-column-gap)
         ) +
         calc(var(--grid-padding) * 2)
     );
@@ -132,10 +132,6 @@
 
   .sortable-ghost {
     visibility: hidden;
-  }
-
-  .square & {
-    --dial-width-value: 10.25; /* 164px */
   }
 
   .tiny & {
@@ -165,7 +161,7 @@
         (100vw - 2 * var(--grid-padding)) /
           (
             var(--grid-max-cols) * var(--dial-width-value) +
-              (var(--grid-max-cols) - 1) * var(--grid-gap-value)
+              (var(--grid-max-cols) - 1) * var(--grid-column-gap-value)
           ) -
           1px
       ),

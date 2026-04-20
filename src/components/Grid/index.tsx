@@ -360,6 +360,10 @@ export const Grid = observer(function Grid() {
           {
             "--grid-max-cols":
               settings.maxColumns === "Unlimited" ? "999" : settings.maxColumns,
+            "--grid-column-gap-setting": `${settings.columnGap}px`,
+            "--grid-row-gap-setting": `${settings.rowGap}px`,
+            "--grid-column-gap-value": settings.columnGap / 16,
+            "--grid-row-gap-value": settings.rowGap / 16,
           } as React.CSSProperties
         }
         ref={gridRef}

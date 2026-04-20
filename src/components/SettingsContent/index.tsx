@@ -23,7 +23,8 @@ export const SettingsContent = observer(function SettingsContent() {
     handleMaxColumns,
     handleNewTab,
     handleShowTitle,
-    handleSquareDials,
+    handleColumnGap,
+    handleRowGap,
     handleSwitchTitle,
     handleThemeOption,
     handleTransparentDials,
@@ -325,23 +326,48 @@ export const SettingsContent = observer(function SettingsContent() {
       </div>
       <div className="setting-wrapper setting-group">
         <div className="setting-label">
-          <div className="setting-title" id="square-dials-title">
-            Square Dials
+          <div className="setting-title" id="column-gap-title">
+            Column Gap
           </div>
-          <div className="setting-description" id="square-dials-description">
-            Make all dials square-shaped instead of rectangular.
+          <div className="setting-description" id="column-gap-description">
+            Adjust the horizontal space between dials.
           </div>
         </div>
-        <div className="setting-option toggle">
-          <Switch
-            aria-labelledby="square-dials-title"
-            aria-describedby="square-dials-description"
-            onClick={() => handleSquareDials(!settings.squareDials)}
-            className="switch-root"
-            checked={settings.squareDials as boolean}
-          >
-            <span className="switch-thumb" />
-          </Switch>
+        <div className="setting-option slider">
+          <input
+            type="range"
+            min="0"
+            max="100"
+            step="1"
+            value={settings.columnGap}
+            onChange={(e) => handleColumnGap(parseInt(e.target.value))}
+            aria-labelledby="column-gap-title"
+            aria-describedby="column-gap-description"
+          />
+          <span className="slider-value">{settings.columnGap}px</span>
+        </div>
+      </div>
+      <div className="setting-wrapper setting-group">
+        <div className="setting-label">
+          <div className="setting-title" id="row-gap-title">
+            Row Gap
+          </div>
+          <div className="setting-description" id="row-gap-description">
+            Adjust the vertical space between dials.
+          </div>
+        </div>
+        <div className="setting-option slider">
+          <input
+            type="range"
+            min="0"
+            max="100"
+            step="1"
+            value={settings.rowGap}
+            onChange={(e) => handleRowGap(parseInt(e.target.value))}
+            aria-labelledby="row-gap-title"
+            aria-describedby="row-gap-description"
+          />
+          <span className="slider-value">{settings.rowGap}px</span>
         </div>
       </div>
       <div className="setting-wrapper setting-group">

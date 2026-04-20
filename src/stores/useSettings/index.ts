@@ -94,7 +94,9 @@ const defaultSettings = {
   newTab: false,
   showAlertBanner: !lastVersion || isUpgrade,
   showTitle: true,
-  squareDials: false,
+  squareDials: true,
+  columnGap: 28,
+  rowGap: 28,
   switchTitle: false,
   themeOption: "System Theme",
   transparentDials: false,
@@ -127,8 +129,9 @@ export const settings = makeAutoObservable({
   newTab: storage[`${apiVersion}-new-tab`] ?? defaultSettings.newTab,
   showAlertBanner: defaultSettings.showAlertBanner,
   showTitle: storage[`${apiVersion}-show-title`] ?? defaultSettings.showTitle,
-  squareDials:
-    storage[`${apiVersion}-square-dials`] ?? defaultSettings.squareDials,
+  squareDials: true,
+  columnGap: storage[`${apiVersion}-column-gap`] || defaultSettings.columnGap,
+  rowGap: storage[`${apiVersion}-row-gap`] || defaultSettings.rowGap,
   switchTitle:
     storage[`${apiVersion}-switch-title`] ?? defaultSettings.switchTitle,
   themeOption,
@@ -224,6 +227,16 @@ export const settings = makeAutoObservable({
     browser.storage.local.set({ [`${apiVersion}-max-columns`]: value });
     settings.maxColumns = value;
     bc.postMessage({ maxColumns: value });
+  },
+  handleRowGap(value: number) {
+    browser.storage.local.set({ [`${apiVersion}-row-gap`]: value });
+    settings.rowGap = value;
+    bc.postMessage({ rowGap: value });
+  },
+  handleColumnGap(value: number) {
+    browser.storage.local.set({ [`${apiVersion}-column-gap`]: value });
+    settings.columnGap = value;
+    bc.postMessage({ columnGap: value });
   },
   handleNewTab(value: boolean) {
     browser.storage.local.set({ [`${apiVersion}-new-tab`]: value });
