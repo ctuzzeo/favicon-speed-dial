@@ -2,7 +2,8 @@
   background-size: cover;
   background-attachment: fixed;
   background-position: center;
-  background-color: var(--background-color);
+  background-color: var(--background-color, #eee);
+  background-repeat: no-repeat;
 
   &.light-wallpaper {
     --background-color: #f5f5f5;

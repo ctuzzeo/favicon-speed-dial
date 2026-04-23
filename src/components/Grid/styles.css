@@ -133,6 +133,10 @@
     visibility: hidden;
   }
 
+  .really-tiny & {
+    font-size: 0.6em;
+  }
+
   .tiny & {
     font-size: 0.8em;
   }

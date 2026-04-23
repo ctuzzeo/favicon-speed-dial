@@ -2,10 +2,19 @@
   --border-radius: 0.375em;
 }
 
+.round .Box {
+  --border-radius: 50%;
+}
+
+.square .Box {
+  --border-radius: 0.375em;
+}
+
 .Link {
   text-decoration: none;
   cursor: pointer;
   outline: none;
+  display: block;
 }
 
 .Box {
@@ -69,20 +78,31 @@
   padding-top: 0.5em;
   display: grid;
   place-content: center;
+  width: var(--dial-width);
 
   .title {
     border-radius: 0.625em;
-    max-width: 100%;
-    height: var(--title-height);
+    width: max-content;
+    max-width: var(--dial-width);
+    min-height: var(--title-height);
+    height: auto;
     display: grid;
     place-content: center;
-    padding-inline: 8px;
+    padding: 0.25em 0.8em;
+    margin-inline: auto;
 
     div {
-      font-size: clamp(10px, 0.8125em, 15px);
-      line-height: initial;
-      text-overflow: ellipsis;
-      white-space: nowrap;
+      font-size: calc(var(--title-size, 13) / 16 * 1em);
+      line-height: 1.2;
+      white-space: normal;
+      word-break: break-word;
+      text-align: center;
+    }
+
+    &.bookmark div {
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
       overflow: hidden;
     }
 

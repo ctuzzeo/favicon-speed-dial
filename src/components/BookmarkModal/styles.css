@@ -63,6 +63,15 @@
       > :focus {
         z-index: 1;
       }
+
+      &.disabled {
+        opacity: 0.5;
+        pointer-events: none;
+      }
+    }
+
+    label.disabled {
+      opacity: 0.5;
     }
 
     .buttons {
@@ -74,6 +83,50 @@
       .btn {
         flex-grow: 1;
       }
+    }
+  }
+
+  /* Switch Component Styles */
+  --switch-background-color: #c2c2c2;
+  --switch-before-background-color: #f5f5f5;
+  --switch-focus-outline-color: #42a5f5;
+  --switch-checked-background-color: #1565c0;
+
+  .color-scheme-dark & {
+    --switch-background-color: #616161;
+    --switch-before-background-color: #f5f5f5;
+  }
+
+  .switch-root {
+    all: unset;
+    display: flex;
+    place-items: center;
+    width: 50px;
+    height: 28px;
+    background-color: var(--switch-background-color);
+    border-radius: 14px;
+    outline: none;
+    cursor: pointer;
+
+    &:focus-visible {
+      outline: 4px solid var(--switch-focus-outline-color);
+    }
+
+    &[aria-checked="true"] {
+      background-color: var(--switch-checked-background-color);
+    }
+  }
+
+  .switch-thumb {
+    width: 22px;
+    height: 22px;
+    background-color: var(--switch-before-background-color);
+    border-radius: 50%;
+    transition: 0.2s;
+    transform: translateX(3px);
+
+    [aria-checked="true"] & {
+      transform: translateX(25px);
     }
   }
 }

@@ -1,5 +1,4 @@
 import { observer } from "mobx-react-lite";
-import { addOpacity } from "random-color-library";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { dialColors } from "#lib/dialColors";
@@ -34,6 +33,7 @@ interface DomainProps {
 interface TitleProps {
   title?: string;
   name: string[];
+  type: "bookmark" | "folder";
 }
 
 export const Dial = observer(function Dial(props: DialProps) {
@@ -52,6 +52,10 @@ export const Dial = observer(function Dial(props: DialProps) {
     </div>
   );
 
+  const isTransparent = props.type === "bookmark" 
+    ? (settings.dialTransparent[props.id] ?? true)
+    : false;
+
   return (
     <a
       href={props.type === "bookmark" ? props.url : `#${props.id}`}
@@ -69,7 +73,8 @@ export const Dial = observer(function Dial(props: DialProps) {
       <div
         className="Box"
         style={{
-          backgroundColor,
+          backgroundColor: isTransparent ? "transparent" : backgroundColor,
+          boxShadow: isTransparent ? "none" : undefined,
           backgroundImage: backgroundImage
             ? `url("${backgroundImage}")`
             : undefined,
@@ -97,15 +102,47 @@ export const Dial = observer(function Dial(props: DialProps) {
             </svg>
           ))}
       </div>
-      <Title {...{ title: props.title, name: props.name }} />
+      <Title {...{ title: props.title, name: props.name, type: props.type }} />
     </a>
   );
 });
 
-const getFaviconUrls = (domain: string, fullUrl: string) => [
-  { url: `https://www.google.com/s2/favicons?domain=${domain}&sz=128`, type: "google" },
-  { url: `/_favicon/?pageUrl=${encodeURIComponent(fullUrl)}&size=128`, type: "native" },
-];
+function getFaviconUrls(domain: string, fullUrl: string) {
+  const list: { url: string; type: string }[] = [
+    {
+      url: `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=128`,
+      type: "google",
+    },
+  ];
+  // Chromium-only extension favicon URL; fails on Firefox and in web demo builds.
+  if (typeof __CHROME__ !== "undefined" && __CHROME__) {
+    list.push({
+      url: `/_favicon/?pageUrl=${encodeURIComponent(fullUrl)}&size=128`,
+      type: "native",
+    });
+  }
+  return list;
+}
+
+function pickBestFavicon(
+  results: { url: string; width: number; type: string }[],
+): string {
+  if (results.length === 0) return "";
+  const typeRank = (t: string) => (t === "native" ? 1 : 0);
+  const sorted = [...results].sort((a, b) => {
+    if (b.width !== a.width) return b.width - a.width;
+    return typeRank(b.type) - typeRank(a.type);
+  });
+  return sorted[0]?.url || "";
+}
+
+function parseBookmarkUrl(url: string): URL | null {
+  try {
+    return new URL(url);
+  } catch {
+    return null;
+  }
+}
 
 const Favicon = observer(function Favicon({
   url,
@@ -115,7 +152,11 @@ const Favicon = observer(function Favicon({
   fallback: React.ReactNode;
 }) {
   const [bestUrl, setBestUrl] = useState<string | null>(null);
-  const hostname = url ? new URL(url).hostname : "";
+  const parsed = url ? parseBookmarkUrl(url) : null;
+  const hostname = parsed?.hostname ?? "";
+  const manualFaviconOverride = hostname
+    ? settings.manualFavicons[hostname]
+    : undefined;
 
   useEffect(() => {
     if (!url) {
@@ -123,13 +164,23 @@ const Favicon = observer(function Favicon({
       return;
     }
 
-    if (settings.manualFavicons[hostname]) {
-      setBestUrl(settings.manualFavicons[hostname]);
+    const parsedUrl = parseBookmarkUrl(url);
+    if (!parsedUrl) {
+      setBestUrl("");
       return;
     }
 
+    const host = parsedUrl.hostname;
+    const manual = settings.manualFavicons[host];
+    if (manual) {
+      setBestUrl(manual);
+      return;
+    }
+
+    setBestUrl(null);
+
     let isMounted = true;
-    const domain = new URL(url).hostname;
+    const domain = parsedUrl.hostname;
     const candidates = getFaviconUrls(domain, url);
 
     let loadedCount = 0;
@@ -138,14 +189,7 @@ const Favicon = observer(function Favicon({
     const checkDone = () => {
       if (!isMounted) return;
       if (loadedCount === candidates.length) {
-        if (results.length === 0) {
-          setBestUrl("");
-          return;
-        }
-        const googles = results.filter((r) => r.type === "google");
-        const natives = results.filter((r) => r.type === "native");
-        const chosen = googles[0] || natives[0];
-        setBestUrl(chosen?.url || "");
+        setBestUrl(pickBestFavicon(results));
       }
     };
 
@@ -170,7 +214,7 @@ const Favicon = observer(function Favicon({
     return () => {
       isMounted = false;
     };
-  }, [url, hostname, settings.manualFavicons[hostname]]);
+  }, [url, hostname, manualFaviconOverride]);
 
   if (bestUrl === null) return null;
   if (bestUrl === "") return <>{fallback}</>;
@@ -180,8 +224,8 @@ const Favicon = observer(function Favicon({
       src={bestUrl}
       alt=""
       style={{
-        width: "60%",
-        height: "60%",
+        width: "100%",
+        height: "100%",
         objectFit: "contain",
         pointerEvents: "none",
       }}
@@ -306,9 +350,10 @@ const Title = observer(function Title(props: TitleProps) {
   return (
     <div className="Title">
       <div 
-        className="title"
+        className={`title ${props.type}`}
         style={{
           "--title-opacity": settings.titleOpacity,
+          "--title-size": settings.titleSize,
         } as React.CSSProperties}
       >
         <div>

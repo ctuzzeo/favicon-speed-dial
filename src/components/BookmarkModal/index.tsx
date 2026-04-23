@@ -9,6 +9,7 @@ import { HexColorInput } from "react-colorful";
 import { ColorPicker } from "#components/ColorPicker";
 import { CaretDown } from "#components/icons/CaretDown.tsx";
 import { Modal } from "#components/Modal";
+import { Switch } from "#components/SettingsContent/Switch";
 import { dialColors } from "#lib/dialColors";
 import { bookmarks } from "#stores/useBookmarks";
 import { colorPicker } from "#stores/useColorPicker";
@@ -27,6 +28,7 @@ export const BookmarkModal = observer(function BookmarkModal() {
     (bookmarks.currentFolder as { id: string }).id || "",
   );
   const [customDialColor, setCustomDialColor] = useState("");
+  const [isTransparent, setIsTransparent] = useState(true);
   const isEditing = modals.editingBookmarkId !== null;
   const bookmarkType = modals.isOpen?.includes("folder")
     ? "folder"
@@ -47,7 +49,13 @@ export const BookmarkModal = observer(function BookmarkModal() {
           // Load the custom dial color for this bookmark, if set.
           const customColor = settings.dialColors[modals.editingBookmarkId];
           setCustomDialColor(customColor || "");
+          // Load transparent preference. Default to true if not explicitly set.
+          const transparent = settings.dialTransparent[modals.editingBookmarkId] ?? true;
+          setIsTransparent(transparent);
         }
+      } else {
+        // Default to transparent for new bookmarks.
+        setIsTransparent(true);
       }
     }
 
@@ -75,6 +83,11 @@ export const BookmarkModal = observer(function BookmarkModal() {
         settings.handleDialColors(modals.editingBookmarkId, color);
       } else if (modals.editingBookmarkId) {
         settings.handleClearColor(modals.editingBookmarkId);
+      }
+
+      // Save transparent preference.
+      if (modals.editingBookmarkId) {
+        settings.handleDialTransparent(modals.editingBookmarkId, isTransparent);
       }
       // Determine which bookmark details have changed.
       const detailsChanged =
@@ -131,6 +144,8 @@ export const BookmarkModal = observer(function BookmarkModal() {
         // Save a custom dial color if it differs from the default.
         settings.handleDialColors(newBookmark.id, customDialColor);
       }
+      // Save transparent preference.
+      settings.handleDialTransparent(newBookmark.id, isTransparent);
       modals.closeModal({
         focusAfterClosed: () =>
           document.querySelector(`[data-id="${newBookmark.id}"]`),
@@ -198,16 +213,28 @@ export const BookmarkModal = observer(function BookmarkModal() {
               </select>
               <CaretDown />
             </div>
-            <label htmlFor="dial-color-input">Color:</label>
-            <div className="dial-color-input">
+            <label htmlFor="transparent-toggle">Transparent:</label>
+            <div className="transparent-toggle">
+              <Switch
+                id="transparent-toggle"
+                checked={isTransparent}
+                onClick={() => setIsTransparent(!isTransparent)}
+                className="switch-root"
+              >
+                <span className="switch-thumb" />
+              </Switch>
+            </div>
+            <label htmlFor="dial-color-input" className={clsx(isTransparent && "disabled")}>Color:</label>
+            <div className={clsx("dial-color-input", isTransparent && "disabled")}>
               <button
                 className="btn defaultBtn colorBtn"
                 style={{ backgroundColor: dialColor }}
                 onClick={colorPicker.openColorPicker}
                 aria-label="Open color picker"
                 type="button"
+                disabled={isTransparent}
               />
-              {colorPicker.isOpen && (
+              {colorPicker.isOpen && !isTransparent && (
                 <ColorPicker
                   {...{
                     color: dialColor,
@@ -219,18 +246,23 @@ export const BookmarkModal = observer(function BookmarkModal() {
               <HexColorInput
                 color={dialColor}
                 id="dial-color-input"
-                onChange={setCustomDialColor}
+                onChange={(color) => {
+                  setCustomDialColor(color);
+                  setIsTransparent(false);
+                }}
                 className={clsx(
                   "input",
                   dialColor && dialColor !== defaultDialColor && "connected",
                 )}
                 prefixed={true}
+                disabled={isTransparent}
               />
               {dialColor && dialColor !== defaultDialColor && (
                 <button
                   className="btn defaultBtn resetBtn"
                   onClick={resetCustomDialColor}
                   type="button"
+                  disabled={isTransparent}
                 >
                   Reset
                 </button>

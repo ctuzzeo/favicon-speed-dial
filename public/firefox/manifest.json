@@ -1,8 +1,13 @@
 {
   "manifest_version": 3,
   "name": "Easy Speed Dial",
-  "version": "2.13.1",
+  "version": "2.13.2",
   "permissions": ["bookmarks", "storage", "unlimitedStorage"],
+  "host_permissions": ["https://www.bing.com/*"],
+  "background": {
+    "scripts": ["background.js"],
+    "type": "module"
+  },
   "browser_specific_settings": {
     "gecko": {
       "id": "easy-speed-dial@ctuzzeo",

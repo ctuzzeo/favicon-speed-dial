@@ -38,7 +38,7 @@ export default tseslint.config([
   tseslint.configs.recommended,
   reactPlugin.configs.flat.recommended,
   reactPlugin.configs.flat["jsx-runtime"],
-  reactHooks.configs.recommended,
+  reactHooks.configs.flat.recommended,
   reactRefresh.configs.vite,
   jsxA11y.flatConfigs.recommended,
   eslintConfigPrettier,

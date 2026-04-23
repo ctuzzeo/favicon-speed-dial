@@ -21,9 +21,11 @@ export const SettingsContent = observer(function SettingsContent() {
     handleDialSize,
     handleMaxColumns,
     handleNewTab,
+    handleEnableSync,
     handleColumnGap,
     handleRowGap,
     handleTitleOpacity,
+    handleTitleSize,
     handleThemeOption,
     handleWallpaper,
     resetSettings,
@@ -145,22 +147,42 @@ export const SettingsContent = observer(function SettingsContent() {
           )}
         </div>
         {/* Custom selection buttons */}
-        <div className="custom-buttons">
+        <div className="background-buttons">
           <button
-            type="button"
-            className="btn defaultBtn custom customColor"
-            onClick={colorPicker.openColorPicker}
+            className="btn defaultBtn"
+            aria-pressed={settings.wallpaper === "custom-color"}
+            onClick={() => colorPicker.openColorPicker()}
           >
             Select Color
           </button>
           <button
-            type="button"
-            className="btn defaultBtn custom"
+            className="btn defaultBtn"
+            aria-pressed={settings.wallpaper === "custom-image"}
             onClick={handleCustomImage}
           >
             Select Image
           </button>
+          <button
+            className="btn defaultBtn"
+            aria-pressed={settings.wallpaper === "bing-wallpaper"}
+            onClick={() => handleWallpaper("bing-wallpaper")}
+          >
+            Bing Image
+          </button>
         </div>
+        {settings.wallpaper === "bing-wallpaper" && settings.bingDebugInfo && (
+          <div
+            style={{
+              fontSize: "10px",
+              opacity: 0.6,
+              marginTop: "-15px",
+              marginBottom: "15px",
+              textAlign: "center",
+            }}
+          >
+            Status: {settings.bingDebugInfo}
+          </div>
+        )}
         {colorPicker.isOpen && (
           <ColorPicker
             {...{
@@ -246,6 +268,48 @@ export const SettingsContent = observer(function SettingsContent() {
       </div>
       <div className="setting-wrapper setting-group">
         <div className="setting-label">
+          <div className="setting-title" id="sync-settings-title">
+            Sync Settings
+          </div>
+          <div className="setting-description" id="sync-settings-description">
+            Synchronize your settings across devices when signed into your browser account.
+          </div>
+        </div>
+        <div className="setting-option toggle">
+          <Switch
+            aria-labelledby="sync-settings-title"
+            aria-describedby="sync-settings-description"
+            onClick={() => handleEnableSync(!settings.enableSync)}
+            className="switch-root"
+            checked={settings.enableSync as boolean}
+          >
+            <span className="switch-thumb" />
+          </Switch>
+        </div>
+      </div>
+      <div className="setting-wrapper setting-group">
+        <div className="setting-label">
+          <div className="setting-title" id="square-dials-title">
+            Square Dials
+          </div>
+          <div className="setting-description" id="square-dials-description">
+            Toggle between square and rounded speed dial icons.
+          </div>
+        </div>
+        <div className="setting-option toggle">
+          <Switch
+            aria-labelledby="square-dials-title"
+            aria-describedby="square-dials-description"
+            onClick={() => settings.handleSquareDials(!settings.squareDials)}
+            className="switch-root"
+            checked={settings.squareDials as boolean}
+          >
+            <span className="switch-thumb" />
+          </Switch>
+        </div>
+      </div>
+      <div className="setting-wrapper setting-group">
+        <div className="setting-label">
           <div className="setting-title" id="max-cols-title">
             Maximum Columns
           </div>
@@ -290,6 +354,7 @@ export const SettingsContent = observer(function SettingsContent() {
             aria-describedby="dial-size-description"
           >
             {[
+              { label: "Really Tiny", value: "really-tiny" },
               { label: "Tiny", value: "tiny" },
               { label: "Small", value: "small" },
               { label: "Medium", value: "medium" },
@@ -372,6 +437,29 @@ export const SettingsContent = observer(function SettingsContent() {
             aria-describedby="title-opacity-description"
           />
           <span className="slider-value">{Math.round(settings.titleOpacity * 100)}%</span>
+        </div>
+      </div>
+      <div className="setting-wrapper setting-group">
+        <div className="setting-label">
+          <div className="setting-title" id="title-size-title">
+            Title Font Size
+          </div>
+          <div className="setting-description" id="title-size-description">
+            Adjust the text size of the bookmark titles.
+          </div>
+        </div>
+        <div className="setting-option slider">
+          <input
+            type="range"
+            min="10"
+            max="32"
+            step="1"
+            value={settings.titleSize}
+            onChange={(e) => handleTitleSize(parseInt(e.target.value))}
+            aria-labelledby="title-size-title"
+            aria-describedby="title-size-description"
+          />
+          <span className="slider-value">{settings.titleSize}px</span>
         </div>
       </div>
       <div className="setting-wrapper setting-group">

@@ -1,3 +1,4 @@
+import { reaction, when } from "mobx";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
@@ -24,12 +25,27 @@ async function initializeApp() {
     setFolder(location.hash.slice(1));
   });
 
+  // Wait for settings to be loaded from storage before determining the initial folder.
+  await when(() => settings.isLoaded);
+
   // Select and set the initial folder to display.
   const initialFolder =
     location.hash.slice(1) ||
     sessionStorage.getItem("last-folder") ||
     (settings.defaultFolder as string);
   await setFolder(initialFolder);
+
+  // Reactively update the folder if the user changes the "Default Folder" in settings
+  // and they are currently in a top-level folder (not a subfolder).
+  reaction(
+    () => settings.defaultFolder,
+    (newDefault) => {
+      // Only switch if we are at the "root" of the navigation (no parent folder)
+      if (!bookmarks.parentId) {
+        setFolder(newDefault);
+      }
+    }
+  );
 }
 
 initializeApp();
