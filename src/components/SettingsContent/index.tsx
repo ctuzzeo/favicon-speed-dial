@@ -28,6 +28,8 @@ export const SettingsContent = observer(function SettingsContent() {
     handleTitleSize,
     handleThemeOption,
     handleWallpaper,
+    handleShowBookmarkSectionBar,
+    handleRememberLastFolder,
     resetSettings,
     restoreFromJSON,
     saveToJSON,
@@ -151,7 +153,7 @@ export const SettingsContent = observer(function SettingsContent() {
           <button
             className="btn defaultBtn"
             aria-pressed={settings.wallpaper === "custom-color"}
-            onClick={() => colorPicker.openColorPicker()}
+            onClick={(e) => colorPicker.openColorPicker(e)}
           >
             Select Color
           </button>
@@ -221,11 +223,39 @@ export const SettingsContent = observer(function SettingsContent() {
       </div>
       <div className="setting-wrapper setting-group">
         <div className="setting-label">
+          <div className="setting-title" id="remember-last-folder-title">
+            Remember last opened folder
+          </div>
+          <div
+            className="setting-description"
+            id="remember-last-folder-description"
+          >
+            When enabled, reopen the same bookmark folder after you restart the
+            browser. The address bar hash for this page, if present, still takes
+            priority.
+          </div>
+        </div>
+        <div className="setting-option toggle">
+          <Switch
+            aria-labelledby="remember-last-folder-title"
+            aria-describedby="remember-last-folder-description"
+            onClick={() =>
+              handleRememberLastFolder(!settings.rememberLastFolder)
+            }
+            className="switch-root"
+            checked={settings.rememberLastFolder as boolean}
+          >
+            <span className="switch-thumb" />
+          </Switch>
+        </div>
+      </div>
+      <div className="setting-wrapper setting-group">
+        <div className="setting-label">
           <div className="setting-title" id="color-scheme-title">
             Color Scheme
           </div>
           <div className="setting-description" id="color-scheme-description">
-            Choose the color scheme for Easy Speed Dial.
+            Choose the color scheme for Favicon Speed Dial.
           </div>
         </div>
         <div className="setting-option select">
@@ -303,6 +333,34 @@ export const SettingsContent = observer(function SettingsContent() {
             onClick={() => settings.handleSquareDials(!settings.squareDials)}
             className="switch-root"
             checked={settings.squareDials as boolean}
+          >
+            <span className="switch-thumb" />
+          </Switch>
+        </div>
+      </div>
+      <div className="setting-wrapper setting-group">
+        <div className="setting-label">
+          <div className="setting-title" id="bookmark-section-bar-title">
+            Bookmark section bar
+          </div>
+          <div
+            className="setting-description"
+            id="bookmark-section-bar-description"
+          >
+            Show a bar at the top to switch between top-level bookmark locations
+            (for example Bookmarks bar and Other bookmarks). Only appears when
+            the browser exposes more than one such location.
+          </div>
+        </div>
+        <div className="setting-option toggle">
+          <Switch
+            aria-labelledby="bookmark-section-bar-title"
+            aria-describedby="bookmark-section-bar-description"
+            onClick={() =>
+              handleShowBookmarkSectionBar(!settings.showBookmarkSectionBar)
+            }
+            className="switch-root"
+            checked={settings.showBookmarkSectionBar as boolean}
           >
             <span className="switch-thumb" />
           </Switch>

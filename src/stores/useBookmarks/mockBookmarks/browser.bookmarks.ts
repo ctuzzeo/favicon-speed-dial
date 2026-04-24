@@ -46,6 +46,14 @@ let bookmarkTree: BookmarkTreeNode = {
       type: "folder",
       children: [],
     },
+    {
+      id: "2",
+      parentId: "0",
+      index: 1,
+      title: "Other Bookmarks",
+      type: "folder",
+      children: [],
+    },
   ],
 };
 
@@ -61,7 +69,7 @@ const listeners: Record<EventType, ListenerCallback[]> = {
 let isProcessingBroadcast = false;
 let broadcastTimeout: ReturnType<typeof setTimeout> | null = null;
 
-const bc = new BroadcastChannel("easy-bookmarks");
+const bc = new BroadcastChannel("favicon-speed-dial-bookmarks");
 
 // Listen for bookmark changes from other tabs via BroadcastChannel
 bc.onmessage = (e) => {

@@ -37,7 +37,43 @@ function getColorScheme(value: string) {
     : "color-scheme-light";
 }
 
-const bc = new BroadcastChannel("easy-settings");
+const bc = new BroadcastChannel("favicon-speed-dial-settings");
+
+type StorageSnapshot = Record<string, unknown>;
+
+type BingWallpaperMessageResponse =
+  | { success: true; data: { images: Array<{ url?: string }> } }
+  | { success: false; error?: string };
+
+function readStorageString(snapshot: StorageSnapshot, key: string, fallback: string) {
+  const v = snapshot[key];
+  return typeof v === "string" ? v : fallback;
+}
+
+function readStorageStringOrFallback(snapshot: StorageSnapshot, key: string, fallback: string) {
+  const v = readStorageString(snapshot, key, "");
+  return v || fallback;
+}
+
+function readStorageBoolean(snapshot: StorageSnapshot, key: string, fallback: boolean) {
+  const v = snapshot[key];
+  return typeof v === "boolean" ? v : fallback;
+}
+
+function readStorageNumberOr(snapshot: StorageSnapshot, key: string, fallback: number) {
+  const v = snapshot[key];
+  return typeof v === "number" && !Number.isNaN(v) ? v || fallback : fallback;
+}
+
+function readStorageNumber(snapshot: StorageSnapshot, key: string, fallback: number) {
+  const v = snapshot[key];
+  return typeof v === "number" && !Number.isNaN(v) ? v : fallback;
+}
+
+function readStorageRecord<T extends Record<string, unknown>>(snapshot: StorageSnapshot, key: string, fallback: T): T {
+  const v = snapshot[key];
+  return v && typeof v === "object" && !Array.isArray(v) ? (v as T) : fallback;
+}
 
 // ==================================================================
 // SETTINGS STORE
@@ -71,6 +107,10 @@ const defaultSettings = {
   wallpaper: prefersDarkMode() ? "dark-wallpaper" : "light-wallpaper",
   bingWallpaperUrl: "",
   bingDebugInfo: "",
+  /** Show a bar to jump between top-level bookmark locations (toolbar, other bookmarks, etc.). */
+  showBookmarkSectionBar: false,
+  /** Restore the last-opened folder on new tab (localStorage); URL hash still wins when set. */
+  rememberLastFolder: true,
 };
 
 export const settings = makeAutoObservable({
@@ -79,47 +119,114 @@ export const settings = makeAutoObservable({
 
   async initialize() {
     try {
-      const localStorage = await browser.storage.local.get();
-      const syncStorage = await (browser.storage.sync
+      const localStorage = (await browser.storage.local.get()) as StorageSnapshot;
+      const syncStorage = (await (browser.storage.sync
         ? browser.storage.sync.get()
-        : Promise.resolve({}));
+        : Promise.resolve({}))) as StorageSnapshot;
 
-      const storage = { ...localStorage, ...syncStorage };
-      const lastVersion = semverCoerce(storage["last-version"] as string)?.version || false;
+      const storage: StorageSnapshot = { ...localStorage, ...syncStorage };
+      const lastVersion =
+        semverCoerce(readStorageString(storage, "last-version", ""))?.version || false;
       const isUpgrade = lastVersion && semverGt(appVersion, lastVersion);
       browser.storage.local.set({ "last-version": appVersion });
 
       runInAction(() => {
-        settings.customColor = storage[`${apiVersion}-custom-color`] || defaultSettings.customColor;
-        settings.defaultFolder = storage[`${apiVersion}-default-folder`] || defaultSettings.defaultFolder;
-        settings.dialColors = (storage[`${apiVersion}-dial-colors`] as DialColors) || defaultSettings.dialColors;
-        settings.dialImages = (storage[`${apiVersion}-dial-images`] as DialImages) || defaultSettings.dialImages;
-        settings.manualFavicons = (storage[`${apiVersion}-manual-favicons`] as ManualFavicons) || defaultSettings.manualFavicons;
-        settings.dialSize = storage[`${apiVersion}-dial-size`] || defaultSettings.dialSize;
-        settings.maxColumns = storage[`${apiVersion}-max-columns`] || defaultSettings.maxColumns;
-        settings.newTab = storage[`${apiVersion}-new-tab`] ?? defaultSettings.newTab;
-        settings.enableSync = storage[`${apiVersion}-enable-sync`] ?? defaultSettings.enableSync;
-        settings.columnGap = storage[`${apiVersion}-column-gap`] || defaultSettings.columnGap;
-        settings.rowGap = storage[`${apiVersion}-row-gap`] || defaultSettings.rowGap;
-        settings.titleOpacity = storage[`${apiVersion}-title-opacity`] ?? defaultSettings.titleOpacity;
-        settings.titleSize = storage[`${apiVersion}-title-size`] ?? defaultSettings.titleSize;
-        settings.themeOption = storage[`${apiVersion}-theme-option`] || defaultSettings.themeOption;
-        settings.wallpaper = storage[`${apiVersion}-wallpaper`] || defaultSettings.wallpaper;
-        settings.bingWallpaperUrl = (storage[`${apiVersion}-bing-wallpaper-url`] as string) || "";
+        settings.customColor = readStorageStringOrFallback(
+          storage,
+          `${apiVersion}-custom-color`,
+          defaultSettings.customColor,
+        );
+        settings.defaultFolder = readStorageStringOrFallback(
+          storage,
+          `${apiVersion}-default-folder`,
+          defaultSettings.defaultFolder,
+        );
+        settings.dialColors = readStorageRecord<DialColors>(
+          storage,
+          `${apiVersion}-dial-colors`,
+          defaultSettings.dialColors,
+        );
+        settings.dialImages = readStorageRecord<DialImages>(
+          storage,
+          `${apiVersion}-dial-images`,
+          defaultSettings.dialImages,
+        );
+        settings.manualFavicons = readStorageRecord<ManualFavicons>(
+          storage,
+          `${apiVersion}-manual-favicons`,
+          defaultSettings.manualFavicons,
+        );
+        settings.dialSize = readStorageStringOrFallback(
+          storage,
+          `${apiVersion}-dial-size`,
+          defaultSettings.dialSize,
+        );
+        settings.maxColumns = readStorageStringOrFallback(
+          storage,
+          `${apiVersion}-max-columns`,
+          defaultSettings.maxColumns,
+        );
+        settings.newTab = readStorageBoolean(storage, `${apiVersion}-new-tab`, defaultSettings.newTab);
+        settings.enableSync = readStorageBoolean(
+          storage,
+          `${apiVersion}-enable-sync`,
+          defaultSettings.enableSync,
+        );
+        settings.columnGap = readStorageNumberOr(storage, `${apiVersion}-column-gap`, defaultSettings.columnGap);
+        settings.rowGap = readStorageNumberOr(storage, `${apiVersion}-row-gap`, defaultSettings.rowGap);
+        settings.titleOpacity = readStorageNumber(
+          storage,
+          `${apiVersion}-title-opacity`,
+          defaultSettings.titleOpacity,
+        );
+        settings.titleSize = readStorageNumber(storage, `${apiVersion}-title-size`, defaultSettings.titleSize);
+        settings.themeOption = readStorageStringOrFallback(
+          storage,
+          `${apiVersion}-theme-option`,
+          defaultSettings.themeOption,
+        );
+        settings.wallpaper = readStorageStringOrFallback(
+          storage,
+          `${apiVersion}-wallpaper`,
+          defaultSettings.wallpaper,
+        );
+        settings.bingWallpaperUrl = readStorageStringOrFallback(
+          storage,
+          `${apiVersion}-bing-wallpaper-url`,
+          "",
+        );
         settings.bingDebugInfo = settings.bingWallpaperUrl ? "Loaded from cache" : "No image yet";
-        settings.squareDials = storage[`${apiVersion}-square-dials`] ?? defaultSettings.squareDials;
-        settings.dialTransparent = (storage[`${apiVersion}-dial-transparent`] as Record<string, boolean>) || defaultSettings.dialTransparent;
+        settings.squareDials = readStorageBoolean(
+          storage,
+          `${apiVersion}-square-dials`,
+          defaultSettings.squareDials,
+        );
+        settings.showBookmarkSectionBar = readStorageBoolean(
+          storage,
+          `${apiVersion}-bookmark-section-bar`,
+          defaultSettings.showBookmarkSectionBar,
+        );
+        settings.rememberLastFolder = readStorageBoolean(
+          storage,
+          `${apiVersion}-remember-last-folder`,
+          defaultSettings.rememberLastFolder,
+        );
+        settings.dialTransparent = readStorageRecord<Record<string, boolean>>(
+          storage,
+          `${apiVersion}-dial-transparent`,
+          defaultSettings.dialTransparent,
+        );
         settings.colorScheme = getColorScheme(settings.themeOption);
         settings.firstRun = !lastVersion;
-        settings.showAlertBanner = !lastVersion || isUpgrade;
+        settings.showAlertBanner = Boolean(!lastVersion || isUpgrade);
         settings.isLoaded = true;
       });
 
       // Load custom image URL
       const customImageData = storage[`${apiVersion}-custom-image`];
-      if (customImageData) {
+      if (typeof customImageData === "string" && customImageData) {
         try {
-          const blobImage = base64ToBlob(customImageData as string);
+          const blobImage = base64ToBlob(customImageData);
           runInAction(() => {
             settings.customImage = URL.createObjectURL(blobImage);
           });
@@ -271,7 +378,7 @@ export const settings = makeAutoObservable({
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `easy-speed-dial-backup-${new Date().toISOString().split("T")[0]}.json`;
+    link.download = `favicon-speed-dial-backup-${new Date().toISOString().split("T")[0]}.json`;
     link.click();
   },
 
@@ -312,12 +419,16 @@ export const settings = makeAutoObservable({
     try {
       runInAction(() => { settings.bingDebugInfo = "Requesting image via Background Service..."; });
       
-      const response = await browser.runtime.sendMessage({ type: "FETCH_BING_WALLPAPER" });
-      
+      const response = (await browser.runtime.sendMessage({
+        type: "FETCH_BING_WALLPAPER",
+      })) as BingWallpaperMessageResponse | undefined | null;
+
       if (!response || !response.success) {
-        throw new Error(response?.error || "Failed to communicate with Background Service");
+        throw new Error(
+          response && "error" in response ? response.error : "Failed to communicate with Background Service",
+        );
       }
-      
+
       const image = response.data.images[0];
       if (!image || !image.url) {
         throw new Error("Invalid response from Bing (no image URL)");
@@ -399,6 +510,18 @@ export const settings = makeAutoObservable({
     settings.squareDials = value;
     settings._saveSetting("square-dials", value);
     bc.postMessage({ squareDials: value });
+  },
+
+  handleShowBookmarkSectionBar(value: boolean) {
+    settings.showBookmarkSectionBar = value;
+    settings._saveSetting("bookmark-section-bar", value);
+    bc.postMessage({ showBookmarkSectionBar: value });
+  },
+
+  handleRememberLastFolder(value: boolean) {
+    settings.rememberLastFolder = value;
+    settings._saveSetting("remember-last-folder", value);
+    bc.postMessage({ rememberLastFolder: value });
   },
 
   handleDialTransparent(id: string, value: boolean) {

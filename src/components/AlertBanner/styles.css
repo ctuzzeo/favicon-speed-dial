@@ -29,10 +29,16 @@
       padding-right: 5px;
     }
 
-    a {
+    .settings-inline-link {
       color: inherit;
+      font: inherit;
+      font-weight: inherit;
       text-decoration: underline;
       cursor: pointer;
+      background: none;
+      border: none;
+      padding: 0;
+      display: inline;
 
       &:hover {
         text-decoration: none;

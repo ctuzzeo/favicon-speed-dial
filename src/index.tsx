@@ -29,9 +29,23 @@ async function initializeApp() {
   await when(() => settings.isLoaded);
 
   // Select and set the initial folder to display.
+  let storedLastFolder: string | null = null;
+  try {
+    storedLastFolder = localStorage.getItem("last-folder");
+    if (!storedLastFolder && typeof sessionStorage !== "undefined") {
+      const legacy = sessionStorage.getItem("last-folder");
+      if (legacy) {
+        localStorage.setItem("last-folder", legacy);
+        storedLastFolder = legacy;
+      }
+    }
+  } catch {
+    /* private mode or storage disabled */
+  }
+
   const initialFolder =
     location.hash.slice(1) ||
-    sessionStorage.getItem("last-folder") ||
+    (settings.rememberLastFolder ? storedLastFolder : null) ||
     (settings.defaultFolder as string);
   await setFolder(initialFolder);
 

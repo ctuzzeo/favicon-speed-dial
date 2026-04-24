@@ -1,7 +1,13 @@
+import { clsx } from "clsx/lite";
 import { observer } from "mobx-react-lite";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { dialColors } from "#lib/dialColors";
+import {
+  FAVICON_MIN_QUALITY_PX,
+  parseBookmarkUrl,
+  resolveFaviconForBookmark,
+} from "#lib/faviconResolve";
 import { contextMenu } from "#stores/useContextMenu";
 import { settings } from "#stores/useSettings";
 
@@ -107,43 +113,6 @@ export const Dial = observer(function Dial(props: DialProps) {
   );
 });
 
-function getFaviconUrls(domain: string, fullUrl: string) {
-  const list: { url: string; type: string }[] = [
-    {
-      url: `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=128`,
-      type: "google",
-    },
-  ];
-  // Chromium-only extension favicon URL; fails on Firefox and in web demo builds.
-  if (typeof __CHROME__ !== "undefined" && __CHROME__) {
-    list.push({
-      url: `/_favicon/?pageUrl=${encodeURIComponent(fullUrl)}&size=128`,
-      type: "native",
-    });
-  }
-  return list;
-}
-
-function pickBestFavicon(
-  results: { url: string; width: number; type: string }[],
-): string {
-  if (results.length === 0) return "";
-  const typeRank = (t: string) => (t === "native" ? 1 : 0);
-  const sorted = [...results].sort((a, b) => {
-    if (b.width !== a.width) return b.width - a.width;
-    return typeRank(b.type) - typeRank(a.type);
-  });
-  return sorted[0]?.url || "";
-}
-
-function parseBookmarkUrl(url: string): URL | null {
-  try {
-    return new URL(url);
-  } catch {
-    return null;
-  }
-}
-
 const Favicon = observer(function Favicon({
   url,
   fallback,
@@ -152,6 +121,8 @@ const Favicon = observer(function Favicon({
   fallback: React.ReactNode;
 }) {
   const [bestUrl, setBestUrl] = useState<string | null>(null);
+  const [iconWidth, setIconWidth] = useState<number | null>(null);
+  const probeGen = useRef(0);
   const parsed = url ? parseBookmarkUrl(url) : null;
   const hostname = parsed?.hostname ?? "";
   const manualFaviconOverride = hostname
@@ -161,75 +132,87 @@ const Favicon = observer(function Favicon({
   useEffect(() => {
     if (!url) {
       setBestUrl("");
+      setIconWidth(null);
       return;
     }
 
     const parsedUrl = parseBookmarkUrl(url);
     if (!parsedUrl) {
       setBestUrl("");
+      setIconWidth(null);
       return;
     }
 
     const host = parsedUrl.hostname;
     const manual = settings.manualFavicons[host];
     if (manual) {
+      probeGen.current += 1;
+      const myGen = probeGen.current;
       setBestUrl(manual);
-      return;
-    }
-
-    setBestUrl(null);
-
-    let isMounted = true;
-    const domain = parsedUrl.hostname;
-    const candidates = getFaviconUrls(domain, url);
-
-    let loadedCount = 0;
-    const results: { url: string; width: number; type: string }[] = [];
-
-    const checkDone = () => {
-      if (!isMounted) return;
-      if (loadedCount === candidates.length) {
-        setBestUrl(pickBestFavicon(results));
-      }
-    };
-
-    candidates.forEach((c) => {
+      setIconWidth(null);
       const img = new Image();
-      img.src = c.url;
       img.onload = () => {
-        if (isMounted) {
-          results.push({ url: c.url, width: img.naturalWidth, type: c.type });
-          loadedCount++;
-          checkDone();
-        }
+        if (myGen !== probeGen.current) return;
+        setIconWidth(Math.max(img.naturalWidth, img.naturalHeight));
       };
       img.onerror = () => {
-        if (isMounted) {
-          loadedCount++;
-          checkDone();
-        }
+        if (myGen !== probeGen.current) return;
+        setIconWidth(FAVICON_MIN_QUALITY_PX);
       };
-    });
+      img.src = manual;
+      return () => {
+        probeGen.current += 1;
+      };
+    }
+
+    probeGen.current += 1;
+    const myGen = probeGen.current;
+    const alive = () => myGen === probeGen.current;
+
+    setBestUrl(null);
+    setIconWidth(null);
+
+    void (async () => {
+      const pick = await resolveFaviconForBookmark(url, host, alive);
+      if (!alive()) return;
+      if (!pick) {
+        setBestUrl("");
+        setIconWidth(null);
+        return;
+      }
+      setBestUrl(pick.url);
+      setIconWidth(pick.width);
+    })();
 
     return () => {
-      isMounted = false;
+      probeGen.current += 1;
     };
   }, [url, hostname, manualFaviconOverride]);
 
   if (bestUrl === null) return null;
   if (bestUrl === "") return <>{fallback}</>;
 
+  const softPlate =
+    iconWidth !== null &&
+    iconWidth > 0 &&
+    iconWidth < FAVICON_MIN_QUALITY_PX;
+
   return (
-    <img
-      src={bestUrl}
-      alt=""
-      style={{
-        width: "100%",
-        height: "100%",
-        objectFit: "contain",
-        pointerEvents: "none",
-      }}
-    />
+    <span
+      className={clsx("FaviconWrap", softPlate && "FaviconWrap--softPlate")}
+    >
+      <img
+        src={bestUrl}
+        alt=""
+        className="FaviconImg"
+        style={{
+          width: "100%",
+          height: "100%",
+          objectFit: "contain",
+          pointerEvents: "none",
+        }}
+      />
+    </span>
   );
 });
 

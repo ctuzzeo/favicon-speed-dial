@@ -8,6 +8,7 @@ import "./styles.css";
 import { runInAction } from "mobx";
 import { contrastRatio } from "random-color-library";
 
+import { BookmarkSectionBar } from "#components/BookmarkSectionBar";
 import { getImageAverageColor } from "#lib/imageLuminance";
 import { bookmarks } from "#stores/useBookmarks";
 import { settings } from "#stores/useSettings";
@@ -39,6 +40,9 @@ export const Grid = observer(function Grid() {
     (settings.defaultFolder !== undefined &&
       bookmarks.currentFolder.id === settings.defaultFolder) ||
     !bookmarks.parentId;
+
+  const showSectionBar =
+    settings.showBookmarkSectionBar && bookmarks.rootSections.length >= 2;
 
   // Check if font size is at maximum (1.6em) for scale mode.
   // This is used to determine if the grid should have a max-width applied.
@@ -329,7 +333,10 @@ export const Grid = observer(function Grid() {
   }, []);
 
   return (
-    <div className="GridContainer">
+    <div
+      className={clsx("GridContainer", showSectionBar && "has-section-bar")}
+    >
+      <BookmarkSectionBar />
       <SettingsGear gearColor={gearColor} />
       {/* Render breadcrumbs if not in the root folder */}
       {!isRoot && (
@@ -353,6 +360,7 @@ export const Grid = observer(function Grid() {
         className={clsx(
           "Grid",
           !isRoot && "has-breadcrumbs",
+          showSectionBar && "has-section-bar",
           isMaxFontSize && "max-width",
         )}
         id="sortable"

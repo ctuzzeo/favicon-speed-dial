@@ -496,8 +496,11 @@ function handleOpenLinkTab() {
 }
 
 function handleOpenSettings() {
-  contextMenu.closeContextMenu();
-  window.open("/settings.html", "_blank");
+  modals.openModal({
+    modal: "settings-panel",
+    focusAfterClosed: contextMenu.focusAfterClosed || null,
+  });
+  contextMenu.closeContextMenu({ focusAfterClosed: false });
 }
 
 function handleSelectThumbnail() {

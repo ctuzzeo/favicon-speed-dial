@@ -1,5 +1,10 @@
 .GridContainer {
   position: relative;
+
+  &.has-section-bar {
+    /* Space for centered section tabs under window chrome; gear stays top-right */
+    padding-top: 4px;
+  }
 }
 
 .gear-button {
@@ -112,6 +117,14 @@
 
   &.has-breadcrumbs {
     padding-block: 0 80px;
+  }
+
+  &.has-section-bar:not(.has-breadcrumbs) {
+    padding-top: 56px;
+  }
+
+  &.has-section-bar.has-breadcrumbs {
+    padding-top: 12px;
   }
 
   &.max-width:not(.unlimited-columns &),

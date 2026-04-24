@@ -1,6 +1,6 @@
 {
-  "name": "easy-speed-dial",
-  "version": "2.13.2",
+  "name": "favicon-speed-dial",
+  "version": "2.2.0",
   "private": true,
   "type": "module",
   "imports": {

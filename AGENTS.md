@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Easy Speed Dial is a cross-platform browser extension that replaces the new tab page with a customizable grid of bookmarks. It supports Chrome, Firefox, and has a web demo version.
+Favicon Speed Dial is a cross-platform browser extension (forked from Easy Speed Dial) that replaces the new tab page with a customizable grid of bookmarks. It supports Chrome, Firefox, and has a web demo version.
 
 ## Key Architecture
 

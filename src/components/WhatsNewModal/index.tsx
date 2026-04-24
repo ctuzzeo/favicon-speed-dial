@@ -17,6 +17,18 @@ export function WhatsNewModal() {
       <div className="scroll-focus" tabIndex={0}>
         <div className="WhatsNew">
           <div>
+            <h2>Version 2.2.0</h2>
+            <h3>This fork</h3>
+            <ul>
+              <li>
+                The extension continues as <strong>Favicon Speed Dial</strong>, based on{" "}
+                <strong>Easy Speed Dial</strong> by Lucas Everett (MIT). See About or the
+                README for attribution and licence notes.
+              </li>
+              <li>Version numbers from here reflect this fork, not the upstream line.</li>
+            </ul>
+          </div>
+          <div>
             <h2>Version 2.13.1</h2>
             <h3>Resolved Issues</h3>
             <ul>
@@ -131,7 +143,7 @@ export function WhatsNewModal() {
             <h2>Version 2.8</h2>
             <h3>New features</h3>
             <ul>
-              <li>Toolbar Dial is now Easy Speed Dial.</li>
+              <li>Toolbar Dial was renamed to Easy Speed Dial (upstream).</li>
               <li>Added Backup/Restore feature to Settings</li>
               <li>Added ability to remove custom background image</li>
               <li>Added Reset feature to Settings</li>

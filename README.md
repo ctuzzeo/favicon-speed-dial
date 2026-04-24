@@ -1,23 +1,49 @@
 <div style="text-align:center"><img src ="screenshot.webp" /></div>
 
-# Easy Speed Dial
+# Favicon Speed Dial
 
-Easy Speed Dial is a browser extension that replaces the new tab page with a colorful grid of your bookmarks and folders.
+Favicon Speed Dial is a browser extension that replaces the new tab page with a colourful grid of your bookmarks and folders, with large favicons and custom wallpapers.
 
-## Support Development
+## Acknowledgements
 
-If you find this extension useful, consider [buying me a coffee](https://www.buymeacoffee.com/lucaseverett) to support continued development!
+This project is a **fork** of **[Easy Speed Dial](https://github.com/lucaseverett/easy-speed-dial)** by **[Lucas Everett](https://lucaseverett.dev/)**. Favicon Speed Dial is built on top of that work and would not exist without the original app and its MIT licence. Thank you, Lucas, for publishing such a solid foundation.
 
-## Live Demo
+## Licence and fork notes
 
-https://demo.easyspeeddial.com/
+This project is released under the **[MIT License](LICENSE)** (see that file for the full text).
+
+Because the upstream project is also MIT-licensed, you may fork and modify this codebase broadly. The MIT conditions that matter in practice for you and for anyone you redistribute to are:
+
+1. **Keep the copyright and licence text** — Ship the `LICENSE` file (or equivalent notice) with source and binary distributions. It must continue to include **Lucas Everett’s original copyright** as well as notice of **Christopher Tuzzeo’s** copyright on fork changes (the `LICENSE` file in this repo does both).
+2. **No warranty** — The licence’s “AS IS” disclaimer applies; that is normal for open source.
+
+A short **upstream attribution** file, [`NOTICE`](NOTICE), records where this fork came from. That is **not required by the MIT Licence**, but it is good practice and helps store reviewers and other developers see the chain of custody at a glance.
+
+This fork is **not** an official release by Lucas Everett; it is an independent project that started from his published source.
+
+## This fork
+
+Source code for this fork: **https://github.com/ctuzzeo/favicon-speed-dial**
+
+## Bundled wallpaper images
+
+Built-in full-size wallpapers are stored in **`public/wallpapers/`** in this repo and referenced from CSS as **`/wallpapers/…`**. They ship **inside** the extension (or demo build), so the new tab page does not depend on Lucas’s old `media.easyspeeddial.com` CDN.
+
+Because Vite’s `publicDir` is **`public/chrome`** or **`public/firefox`** (and **`public/demo`** for the web demo), those folders contain a **`wallpapers`** symlink pointing at **`../wallpapers`**, so every target build copies the same files into `dist-*/wallpapers/`.
+
+Using **`raw.githubusercontent.com`** as a hot-link CDN would also tie you to GitHub for every background paint; vendoring the files avoids that, works offline, and still keeps the assets **in GitHub** as normal repository files.
+
+## Live demo (original project)
+
+The upstream project hosts a demo at https://demo.easyspeeddial.com/ . You can also run this repository locally (see below).
 
 ## Installation
 
 ### Clone the repo
 
 ```sh
-git clone https://github.com/lucaseverett/easy-speed-dial.git
+git clone https://github.com/ctuzzeo/favicon-speed-dial.git
+cd favicon-speed-dial
 ```
 
 ### Install packages

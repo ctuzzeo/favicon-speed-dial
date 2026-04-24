@@ -11,6 +11,15 @@ interface BookmarkFolder {
   title: string;
 }
 
+export interface BookmarkRootSection {
+  id: string;
+  title: string;
+}
+
+function bookmarkTreeRootId(): string {
+  return __FIREFOX__ ? "root________" : "0";
+}
+
 interface CreateBookmarkParams {
   url?: string;
   title: string;
@@ -29,9 +38,17 @@ export const bookmarks = makeAutoObservable({
   currentFolder: {} as BookmarkFolder,
   folders: [] as Array<{ id: string; title: string }>,
   parentId: "",
+  /** Top-level folders under the bookmark tree root (e.g. Bookmarks bar, Other bookmarks). */
+  rootSections: [] as BookmarkRootSection[],
+  /** Which root section the current folder belongs to (direct child of root, or ancestor). */
+  activeRootSectionId: "",
   async changeFolder(id: string) {
     const newBookmarks = await browser.bookmarks.getSubTree(id);
-    sessionStorage.setItem("last-folder", id);
+    try {
+      localStorage.setItem("last-folder", id);
+    } catch {
+      /* private mode or storage disabled */
+    }
     runInAction(() => {
       bookmarks.bookmarks = filter(newBookmarks[0].children || []).sort(
         (a, b) => a.index! - b.index!,
@@ -44,6 +61,27 @@ export const bookmarks = makeAutoObservable({
           ? newBookmarks[0].parentId || ""
           : "";
     });
+
+    const rootId = bookmarkTreeRootId();
+    let node = newBookmarks[0] as Bookmarks.BookmarkTreeNode | undefined;
+    let activeSectionId = id;
+    while (node?.parentId && node.parentId !== rootId) {
+      const parents = await browser.bookmarks.get(node.parentId);
+      node = parents[0];
+      if (!node) break;
+      activeSectionId = node.id;
+    }
+    runInAction(() => {
+      bookmarks.activeRootSectionId = activeSectionId;
+    });
+  },
+  async goToFolder(id: string) {
+    const exists = await bookmarks.validateFolderExists(id);
+    if (!exists) return;
+    await bookmarks.changeFolder(id);
+    if (location.hash.slice(1) !== id) {
+      history.replaceState(null, "", `#${id}`);
+    }
   },
   async createBookmark({ url, title, parentId }: CreateBookmarkParams) {
     const newBookmark = await browser.bookmarks.create({
@@ -200,7 +238,7 @@ async function getFolders() {
 
   function logItems(bookmarkItem: Bookmarks.BookmarkTreeNode, indent: number) {
     if (!bookmarkItem.url) {
-      const root = __FIREFOX__ ? "root________" : "0";
+      const root = bookmarkTreeRootId();
 
       if (bookmarkItem.id !== root) {
         addFolder(
@@ -226,7 +264,15 @@ async function getFolders() {
   }
 
   const getTree = await browser.bookmarks.getTree();
+  const rootNode = getTree[0];
+  const sectionChildren = (rootNode.children || []).filter((c) => !c.url);
   logTree(getTree);
+  runInAction(() => {
+    bookmarks.rootSections = sectionChildren.map(({ id, title }) => ({
+      id,
+      title,
+    }));
+  });
 }
 
 // ==========================

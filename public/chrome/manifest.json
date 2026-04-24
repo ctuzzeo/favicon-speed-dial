@@ -1,14 +1,18 @@
 {
   "manifest_version": 3,
-  "name": "Easy Speed Dial",
-  "version": "2.13.2",
+  "name": "Favicon Speed Dial",
+  "version": "2.2.0",
   "permissions": ["bookmarks", "storage", "unlimitedStorage", "favicon"],
-  "host_permissions": ["https://www.bing.com/*"],
+  "host_permissions": [
+    "https://www.bing.com/*",
+    "https://*/*",
+    "http://*/*"
+  ],
   "background": {
     "service_worker": "background.js",
     "type": "module"
   },
-  "description": "Easy Speed Dial replaces the new tab page with a colorful grid of your bookmarks and folders.",
+  "description": "Favicon Speed Dial replaces the new tab page with a colourful grid of your bookmarks and folders, with large favicons and custom wallpapers.",
   "chrome_url_overrides": {
     "newtab": "index.html"
   },
@@ -27,6 +31,5 @@
     "512": "icons/512.png",
     "1024": "icons/1024.png"
   },
-  "author": "Lucas Everett",
-  "homepage_url": "https://easyspeeddial.com"
+  "author": "Christopher Tuzzeo"
 }
