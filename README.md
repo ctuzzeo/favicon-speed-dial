@@ -33,10 +33,6 @@ Because Vite’s `publicDir` is **`public/chrome`** or **`public/firefox`** (and
 
 Using **`raw.githubusercontent.com`** as a hot-link CDN would also tie you to GitHub for every background paint; vendoring the files avoids that, works offline, and still keeps the assets **in GitHub** as normal repository files.
 
-## Live demo (original project)
-
-The upstream project hosts a demo at https://demo.easyspeeddial.com/ . You can also run this repository locally (see below).
-
 ## Installation
 
 ### Clone the repo
