@@ -390,7 +390,7 @@ export const ContextMenu = observer(function ContextMenu() {
               role="menuitem"
               onMouseEnter={handleMouseEnter}
             >
-              Customize
+              Settings
             </button>
           </li>
           <Separator />

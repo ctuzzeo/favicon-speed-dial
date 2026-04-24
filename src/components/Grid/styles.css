@@ -2,8 +2,7 @@
   position: relative;
 
   &.has-section-bar {
-    /* Space for centered section tabs under window chrome; gear stays top-right */
-    padding-top: 4px;
+    padding-top: 0;
   }
 }
 
@@ -33,66 +32,78 @@
   width: 16px;
 }
 
+/* Parent-folder control: same pill as bookmark titles / section bar (`--title-*` on element). */
 .Breadcrumbs {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 18px;
-  height: 80px;
+  padding: 2px 16px 4px;
+  box-sizing: border-box;
   cursor: default;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
 
-  span {
-    text-decoration: underline;
+.Breadcrumbs a {
+  display: inline-flex;
+  align-items: center;
+  column-gap: 0.25em;
+  text-decoration: none;
+  cursor: pointer;
+  border-radius: 0.625em;
+  padding: 0.25em 0.8em;
+  font-size: calc(var(--title-size, 13) / 16 * 1em);
+  line-height: 1.2;
+  font-weight: 400;
+  border: none;
+  max-width: min(100vw - 80px, 32em);
+}
 
-    &:hover {
-      text-decoration: none;
-    }
-  }
+.Breadcrumbs .chevron-left {
+  width: 1em;
+  height: 1em;
+  flex-shrink: 0;
+}
 
-  a {
-    display: flex;
-    align-items: center;
-    column-gap: 3px;
-    text-decoration: none;
-    cursor: pointer;
-    border-radius: 2px;
-    height: 30px;
-    padding: 0 8px 0 4px;
-    border: none;
+.Breadcrumbs span {
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
-    .chevron-left {
-      width: 17px;
-      height: 17px;
-    }
+html.color-scheme-light .Breadcrumbs a {
+  background-color: rgba(255, 255, 255, var(--title-opacity, 0.75));
+  color: #373737;
+  fill: #373737;
+}
 
-    .color-scheme-light & {
-      color: #424242;
-      fill: #424242;
-      background-color: rgba(255, 255, 255, 0.75);
-    }
+html.color-scheme-light .Breadcrumbs a:hover {
+  filter: brightness(0.96);
+}
 
-    .color-scheme-dark & {
-      color: #e0e0e0;
-      fill: #e0e0e0;
-      background-color: rgba(55, 55, 55, 0.75);
-    }
+html.color-scheme-dark .Breadcrumbs a {
+  background-color: rgba(55, 55, 55, var(--title-opacity, 0.75));
+  color: #eeeeee;
+  fill: #eeeeee;
+}
 
-    &:focus-visible {
-      background-color: #1976d2;
-      color: #fff;
-      fill: #fff;
-      outline: none;
-      text-decoration: none;
+html.color-scheme-dark .Breadcrumbs a:hover {
+  filter: brightness(1.1);
+}
 
-      .color-scheme-dark & {
-        background-color: #90caf9;
-        color: #000;
-        fill: #000;
-      }
-    }
-  }
+html.color-scheme-light .Breadcrumbs a:focus-visible {
+  outline: none;
+  background-color: #1976d2;
+  color: #fff;
+  fill: #fff;
+}
+
+html.color-scheme-dark .Breadcrumbs a:focus-visible {
+  outline: none;
+  background-color: #90caf9;
+  color: #000;
+  fill: #000;
 }
 
 .Grid {
@@ -120,11 +131,11 @@
   }
 
   &.has-section-bar:not(.has-breadcrumbs) {
-    padding-top: 56px;
+    padding-top: 12px;
   }
 
   &.has-section-bar.has-breadcrumbs {
-    padding-top: 12px;
+    padding-top: 4px;
   }
 
   &.max-width:not(.unlimited-columns &),

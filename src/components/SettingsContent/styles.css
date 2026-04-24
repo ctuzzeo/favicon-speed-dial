@@ -36,6 +36,10 @@
   display: flex;
   gap: 1px;
 
+  .upload-image-btn {
+    margin-right: 4px;
+  }
+
   button {
     width: 100%;
 

@@ -5,6 +5,9 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { dialColors } from "#lib/dialColors";
 import {
   FAVICON_MIN_QUALITY_PX,
+  getChromeFastHqFaviconUrl,
+  getPlaceholderFaviconUrl,
+  isDiscouragedDdgPngIconUrl,
   parseBookmarkUrl,
   resolveFaviconForBookmark,
 } from "#lib/faviconResolve";
@@ -120,7 +123,9 @@ const Favicon = observer(function Favicon({
   url?: string;
   fallback: React.ReactNode;
 }) {
-  const [bestUrl, setBestUrl] = useState<string | null>(null);
+  type HqState = "pending" | "ready" | "empty";
+  const [hqState, setHqState] = useState<HqState>("pending");
+  const [hqUrl, setHqUrl] = useState<string | null>(null);
   const [iconWidth, setIconWidth] = useState<number | null>(null);
   const probeGen = useRef(0);
   const parsed = url ? parseBookmarkUrl(url) : null;
@@ -128,27 +133,33 @@ const Favicon = observer(function Favicon({
   const manualFaviconOverride = hostname
     ? settings.manualFavicons[hostname]
     : undefined;
+  const externalFav = settings.enableExternalFaviconProviders;
+
+  const placeholderUrl = url ? getPlaceholderFaviconUrl(url, externalFav) : null;
 
   useEffect(() => {
     if (!url) {
-      setBestUrl("");
+      setHqState("empty");
+      setHqUrl(null);
       setIconWidth(null);
       return;
     }
 
     const parsedUrl = parseBookmarkUrl(url);
     if (!parsedUrl) {
-      setBestUrl("");
+      setHqState("empty");
+      setHqUrl(null);
       setIconWidth(null);
       return;
     }
 
     const host = parsedUrl.hostname;
     const manual = settings.manualFavicons[host];
-    if (manual) {
+    if (manual && !isDiscouragedDdgPngIconUrl(manual)) {
       probeGen.current += 1;
       const myGen = probeGen.current;
-      setBestUrl(manual);
+      setHqState("ready");
+      setHqUrl(manual);
       setIconWidth(null);
       const img = new Image();
       img.onload = () => {
@@ -169,40 +180,80 @@ const Favicon = observer(function Favicon({
     const myGen = probeGen.current;
     const alive = () => myGen === probeGen.current;
 
-    setBestUrl(null);
-    setIconWidth(null);
+    const chromeFastHq = getChromeFastHqFaviconUrl(url);
+    if (chromeFastHq) {
+      setHqState("ready");
+      setHqUrl(chromeFastHq);
+      setIconWidth(null);
+    } else {
+      setHqState("pending");
+      setHqUrl(null);
+      setIconWidth(null);
+    }
 
+    /* Each dial runs resolve independently; global probe slots cap network decode load. */
     void (async () => {
-      const pick = await resolveFaviconForBookmark(url, host, alive);
+      const pick = await resolveFaviconForBookmark(url, alive, {
+        externalFaviconProviders: externalFav,
+      });
       if (!alive()) return;
       if (!pick) {
-        setBestUrl("");
+        if (chromeFastHq) {
+          setHqState("ready");
+          setHqUrl(chromeFastHq);
+          setIconWidth(null);
+          return;
+        }
+        setHqState("empty");
+        setHqUrl(null);
         setIconWidth(null);
         return;
       }
-      setBestUrl(pick.url);
+      setHqUrl(pick.url);
       setIconWidth(pick.width);
+      setHqState("ready");
     })();
 
     return () => {
       probeGen.current += 1;
     };
-  }, [url, hostname, manualFaviconOverride]);
+  }, [url, hostname, manualFaviconOverride, externalFav]);
 
-  if (bestUrl === null) return null;
-  if (bestUrl === "") return <>{fallback}</>;
+  const showPlaceholderWhileLoading =
+    hqState === "pending" && Boolean(placeholderUrl);
+  const showHq = hqState === "ready" && Boolean(hqUrl);
+  const showPlaceholderAsFallback =
+    hqState === "empty" && Boolean(placeholderUrl);
 
+  if (hqState === "empty" && !placeholderUrl) {
+    return <>{fallback}</>;
+  }
+
+  if (!showPlaceholderWhileLoading && !showHq && !showPlaceholderAsFallback) {
+    return null;
+  }
+
+  const displayUrl = showHq ? hqUrl! : placeholderUrl!;
   const softPlate =
-    iconWidth !== null &&
-    iconWidth > 0 &&
-    iconWidth < FAVICON_MIN_QUALITY_PX;
+    showPlaceholderWhileLoading ||
+    showPlaceholderAsFallback ||
+    (iconWidth !== null &&
+      iconWidth > 0 &&
+      iconWidth < FAVICON_MIN_QUALITY_PX);
+
+  const dimPlaceholder =
+    showPlaceholderWhileLoading || showPlaceholderAsFallback;
 
   return (
     <span
-      className={clsx("FaviconWrap", softPlate && "FaviconWrap--softPlate")}
+      className={clsx(
+        "FaviconWrap",
+        softPlate && "FaviconWrap--softPlate",
+        dimPlaceholder && "FaviconWrap--placeholder",
+      )}
     >
       <img
-        src={bestUrl}
+        src={displayUrl}
         alt=""
         className="FaviconImg"
         style={{

@@ -340,7 +340,16 @@ export const Grid = observer(function Grid() {
       <SettingsGear gearColor={gearColor} />
       {/* Render breadcrumbs if not in the root folder */}
       {!isRoot && (
-        <div className="Breadcrumbs" ref={breadcrumbsRef}>
+        <div
+          className="Breadcrumbs"
+          ref={breadcrumbsRef}
+          style={
+            {
+              "--title-opacity": settings.titleOpacity,
+              "--title-size": settings.titleSize,
+            } as React.CSSProperties
+          }
+        >
           <a href={`#${bookmarks.parentId}`} title="Go to parent folder">
             <svg
               xmlns="http://www.w3.org/2000/svg"

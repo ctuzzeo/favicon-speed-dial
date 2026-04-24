@@ -45,6 +45,12 @@ npm run lint    # Lint with ESLint
 npm run format  # Format with Prettier
 ```
 
+### Dependencies
+
+```bash
+npm update      # Bump lockfile + node_modules within semver ranges in package.json
+```
+
 ## File Structure
 
 - `src/index.tsx` - Main bookmarks page entry point
@@ -67,6 +73,20 @@ npm run format  # Format with Prettier
 ## Testing
 
 Uses Vitest for testing. Tests are located alongside source files with `.test.ts` extensions.
+
+### Agent workflow (dependencies)
+
+**Always run `npm update` at the repository root** when you pick up work in this project (and whenever the user asks for a dependency refresh). That refreshes `package-lock.json` and installed packages within the ranges declared in `package.json`. After the lockfile or `node_modules` tree changes, run **`npm test`** and fix any regressions before considering the task done.
+
+### Agent workflow (favicon / extension changes)
+
+After changing favicon resolution, `src/lib/faviconResolve.ts`, manifests, or anything that affects the packaged extension, run:
+
+```bash
+npm test && npm run build:chrome
+```
+
+before considering the task done, so the unpacked `dist-chrome` build matches what you ship and tests stay green.
 
 ## Code Conventions
 

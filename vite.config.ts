@@ -46,7 +46,9 @@ export default defineConfig({
   resolve: {
     alias: {
       "webextension-polyfill":
-        PROJECT === "demo" ? "./browser-polyfill.js" : "webextension-polyfill",
+        PROJECT === "demo"
+          ? resolve(__dirname, "src/demo-webextension-polyfill.ts")
+          : "webextension-polyfill",
     },
   },
 });

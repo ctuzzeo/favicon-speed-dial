@@ -1,51 +1,13 @@
 import { observer } from "mobx-react-lite";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { Modal } from "#components/Modal";
+import { getFaviconPickerCandidates } from "#lib/faviconResolve";
 import { bookmarks } from "#stores/useBookmarks";
 import { modals } from "#stores/useModals";
 import { settings } from "#stores/useSettings";
 
 import "./styles.css";
-
-type Provider = {
-  name: string;
-  getUrl: (domain: string, url: string) => string;
-};
-
-const ALL_PROVIDERS: Provider[] = [
-  {
-    name: "Native Cache",
-    getUrl: (_domain: string, url: string) =>
-      `/_favicon/?pageUrl=${encodeURIComponent(url)}&size=128`,
-  },
-  {
-    name: "DuckDuckGo",
-    getUrl: (domain: string) =>
-      `https://icons.duckduckgo.com/ip3/${domain}.ico`,
-  },
-  {
-    name: "Google S2",
-    getUrl: (domain: string) =>
-      `https://www.google.com/s2/favicons?domain=${domain}&sz=128`,
-  },
-  {
-    name: "Clearbit",
-    getUrl: (domain: string) => `https://logo.clearbit.com/${domain}`,
-  },
-  {
-    name: "IconHorse",
-    getUrl: (domain: string) => `https://icon.horse/icon/${domain}`,
-  },
-];
-
-function activeProviders(): Provider[] {
-  const chrome =
-    typeof __CHROME__ !== "undefined" && __CHROME__;
-  return ALL_PROVIDERS.filter(
-    (p) => p.name !== "Native Cache" || chrome,
-  );
-}
 
 export const FaviconModal = observer(function FaviconModal() {
   const editingBookmarkId = modals.editingBookmarkId;
@@ -55,8 +17,6 @@ export const FaviconModal = observer(function FaviconModal() {
   );
   const [loadedUrls, setLoadedUrls] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
-
-  const providers = useMemo(() => activeProviders(), []);
 
   useEffect(() => {
     let cancelled = false;
@@ -78,18 +38,13 @@ export const FaviconModal = observer(function FaviconModal() {
 
       if (bookmark?.url) {
         try {
-          const fullHostname = new URL(bookmark.url).hostname;
-          const rootDomain = fullHostname.replace(/^www\./, "");
-
+          new URL(bookmark.url);
           setBookmarkURL(bookmark.url);
-          const urls = providers.map((p) => ({
-            name: p.name,
-            url: p.getUrl(
-              p.name === "Native Cache" ? fullHostname : rootDomain,
-              bookmark.url!,
-            ),
-          }));
-          setCandidates(urls);
+          setCandidates(
+            await getFaviconPickerCandidates(bookmark.url, {
+              externalFaviconProviders: settings.enableExternalFaviconProviders,
+            }),
+          );
         } catch {
           setBookmarkURL("");
           setCandidates([]);
@@ -103,7 +58,9 @@ export const FaviconModal = observer(function FaviconModal() {
     return () => {
       cancelled = true;
     };
-  }, [editingBookmarkId, providers]);
+    /* Re-fetch candidates when privacy toggle changes while modal context unchanged. */
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- MobX observable
+  }, [editingBookmarkId, settings.enableExternalFaviconProviders]);
 
   function handleSelect(iconUrl: string) {
     if (!bookmarkURL) return;
@@ -119,12 +76,18 @@ export const FaviconModal = observer(function FaviconModal() {
   const hasValidCandidates = Object.values(loadedUrls).some((v) => v);
 
   return (
-    <Modal title="Select Favicon" width="450px">
+    <Modal
+      title="Select Favicon"
+      width="min(92vw, 640px)"
+      height="min(78vh, 680px)"
+    >
       <div className="FaviconModal">
         <p className="description">
           Choose the best quality icon for{" "}
-          <strong>{bookmarkURL || "this bookmark"}</strong>. Only icons that
-          load successfully are shown below.
+          <strong>{bookmarkURL || "this bookmark"}</strong>. The same sources
+          are tried for every site; only icons that load on this origin are shown
+          (missing rows usually mean that path is not hosted here, e.g. touch
+          icons on a CDN).
         </p>
 
         {loading ? (
@@ -134,7 +97,7 @@ export const FaviconModal = observer(function FaviconModal() {
             <div className="favicon-grid">
               {candidates.map((candidate) => (
                 <button
-                  key={candidate.name}
+                  key={`${candidate.name}-${candidate.url}`}
                   type="button"
                   className="favicon-candidate"
                   onClick={() => handleSelect(candidate.url)}

@@ -2,6 +2,7 @@ import { reaction, when } from "mobx";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
+import { startFaviconPrefetchOnce } from "#lib/faviconPrefetch";
 import { Bookmarks } from "#pages/Bookmarks";
 import { bookmarks } from "#stores/useBookmarks";
 import { settings } from "#stores/useSettings";
@@ -48,6 +49,7 @@ async function initializeApp() {
     (settings.rememberLastFolder ? storedLastFolder : null) ||
     (settings.defaultFolder as string);
   await setFolder(initialFolder);
+  startFaviconPrefetchOnce();
 
   // Reactively update the folder if the user changes the "Default Folder" in settings
   // and they are currently in a top-level folder (not a subfolder).

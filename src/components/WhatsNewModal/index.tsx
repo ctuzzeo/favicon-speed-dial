@@ -17,7 +17,7 @@ export function WhatsNewModal() {
       <div className="scroll-focus" tabIndex={0}>
         <div className="WhatsNew">
           <div>
-            <h2>Version 2.2.0</h2>
+            <h2>Version 3.0.0</h2>
             <h3>This fork</h3>
             <ul>
               <li>

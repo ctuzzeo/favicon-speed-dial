@@ -21,6 +21,7 @@ export const SettingsContent = observer(function SettingsContent() {
     handleDialSize,
     handleMaxColumns,
     handleNewTab,
+    handleExternalFaviconProviders,
     handleEnableSync,
     handleColumnGap,
     handleRowGap,
@@ -151,18 +152,11 @@ export const SettingsContent = observer(function SettingsContent() {
         {/* Custom selection buttons */}
         <div className="background-buttons">
           <button
-            className="btn defaultBtn"
-            aria-pressed={settings.wallpaper === "custom-color"}
-            onClick={(e) => colorPicker.openColorPicker(e)}
-          >
-            Select Color
-          </button>
-          <button
-            className="btn defaultBtn"
+            className="btn defaultBtn upload-image-btn"
             aria-pressed={settings.wallpaper === "custom-image"}
             onClick={handleCustomImage}
           >
-            Select Image
+            Upload Image
           </button>
           <button
             className="btn defaultBtn"
@@ -230,9 +224,7 @@ export const SettingsContent = observer(function SettingsContent() {
             className="setting-description"
             id="remember-last-folder-description"
           >
-            When enabled, reopen the same bookmark folder after you restart the
-            browser. The address bar hash for this page, if present, still takes
-            priority.
+            Reopen the last folder after restart. URL hash on this page wins if set.
           </div>
         </div>
         <div className="setting-option toggle">
@@ -281,7 +273,7 @@ export const SettingsContent = observer(function SettingsContent() {
             Open in New Tab
           </div>
           <div className="setting-description" id="open-new-tabs-description">
-            Open all bookmarks in a new browser tab instead of the current one.
+            Open each bookmark in a new tab.
           </div>
         </div>
         <div className="setting-option toggle">
@@ -291,6 +283,35 @@ export const SettingsContent = observer(function SettingsContent() {
             onClick={() => handleNewTab(!settings.newTab)}
             className="switch-root"
             checked={settings.newTab as boolean}
+          >
+            <span className="switch-thumb" />
+          </Switch>
+        </div>
+      </div>
+      <div className="setting-wrapper setting-group">
+        <div className="setting-label">
+          <div className="setting-title" id="external-favicon-providers-title">
+            External favicon providers
+          </div>
+          <div
+            className="setting-description"
+            id="external-favicon-providers-description"
+          >
+            Use third-party hosts (e.g. Google) for sharper icons. Off: first-party +
+            Chrome favicon cache only.
+          </div>
+        </div>
+        <div className="setting-option toggle">
+          <Switch
+            aria-labelledby="external-favicon-providers-title"
+            aria-describedby="external-favicon-providers-description"
+            onClick={() =>
+              handleExternalFaviconProviders(
+                !settings.enableExternalFaviconProviders,
+              )
+            }
+            className="switch-root"
+            checked={settings.enableExternalFaviconProviders as boolean}
           >
             <span className="switch-thumb" />
           </Switch>
@@ -347,9 +368,7 @@ export const SettingsContent = observer(function SettingsContent() {
             className="setting-description"
             id="bookmark-section-bar-description"
           >
-            Show a bar at the top to switch between top-level bookmark locations
-            (for example Bookmarks bar and Other bookmarks). Only appears when
-            the browser exposes more than one such location.
+            Top bar to jump between Bookmarks bar, Other bookmarks, etc., when available.
           </div>
         </div>
         <div className="setting-option toggle">

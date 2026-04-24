@@ -4,6 +4,11 @@ import semverCoerce from "semver/functions/coerce";
 import semverGt from "semver/functions/gt";
 import browser from "webextension-polyfill";
 
+import {
+  assertBingCdnHttpsUrl,
+  buildBingWallpaperUrlFromHpApiPath,
+} from "#lib/bingWallpaperUrl";
+
 // ==================================================================
 // SETUP
 // ==================================================================
@@ -95,7 +100,7 @@ const defaultSettings = {
   dialTransparent: {} as Record<string, boolean>,
   firstRun: true,
   maxColumns: "7",
-  newTab: false,
+  newTab: true,
   showAlertBanner: true,
   squareDials: true,
   enableSync: true,
@@ -108,9 +113,14 @@ const defaultSettings = {
   bingWallpaperUrl: "",
   bingDebugInfo: "",
   /** Show a bar to jump between top-level bookmark locations (toolbar, other bookmarks, etc.). */
-  showBookmarkSectionBar: false,
+  showBookmarkSectionBar: true,
   /** Restore the last-opened folder on new tab (localStorage); URL hash still wins when set. */
   rememberLastFolder: true,
+  /**
+   * When true, third-party favicon services may be used (they learn bookmark hostnames).
+   * When false, only same-origin assets, web manifests, and Chrome’s built-in `/_favicon/`.
+   */
+  enableExternalFaviconProviders: true,
 };
 
 export const settings = makeAutoObservable({
@@ -210,6 +220,11 @@ export const settings = makeAutoObservable({
           storage,
           `${apiVersion}-remember-last-folder`,
           defaultSettings.rememberLastFolder,
+        );
+        settings.enableExternalFaviconProviders = readStorageBoolean(
+          storage,
+          `${apiVersion}-external-favicon-providers`,
+          defaultSettings.enableExternalFaviconProviders,
         );
         settings.dialTransparent = readStorageRecord<Record<string, boolean>>(
           storage,
@@ -434,11 +449,19 @@ export const settings = makeAutoObservable({
         throw new Error("Invalid response from Bing (no image URL)");
       }
 
-      let imageUrl = `https://www.bing.com${image.url}`;
+      let imageUrl = buildBingWallpaperUrlFromHpApiPath(image.url);
+      if (!imageUrl) {
+        throw new Error("Invalid Bing image URL (rejected by allowlist)");
+      }
       if (imageUrl.includes("1366x768")) {
         imageUrl = imageUrl.replace("1366x768", "1920x1080");
       }
-      
+      const validated = assertBingCdnHttpsUrl(imageUrl);
+      if (!validated) {
+        throw new Error("Invalid Bing image URL after normalization");
+      }
+      imageUrl = validated;
+
       runInAction(() => {
         settings.bingWallpaperUrl = imageUrl;
         settings.bingDebugInfo = `Success! Image retrieved via Background.`;
@@ -522,6 +545,12 @@ export const settings = makeAutoObservable({
     settings.rememberLastFolder = value;
     settings._saveSetting("remember-last-folder", value);
     bc.postMessage({ rememberLastFolder: value });
+  },
+
+  handleExternalFaviconProviders(value: boolean) {
+    settings.enableExternalFaviconProviders = value;
+    settings._saveSetting("external-favicon-providers", value);
+    bc.postMessage({ enableExternalFaviconProviders: value });
   },
 
   handleDialTransparent(id: string, value: boolean) {

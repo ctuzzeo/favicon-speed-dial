@@ -3,7 +3,7 @@
   justify-content: center;
   align-items: center;
   min-height: 44px;
-  padding: 8px 56px 4px;
+  padding: 6px 56px 0;
   box-sizing: border-box;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -20,50 +20,60 @@
   list-style: none;
 }
 
+/* Match dial `.Title .title` pill: same radius, `--title-opacity`, and text colors. */
 .BookmarkSectionBar-link {
   margin: 0;
-  padding: 0.25em 0.15em;
+  padding: 0.25em 0.8em;
   border: none;
-  background: none;
   cursor: pointer;
-  font-size: 15px;
+  font-size: calc(var(--title-size, 13) / 16 * 1em);
   font-weight: 400;
+  line-height: 1.2;
   letter-spacing: 0.01em;
   text-decoration: none;
-  border-radius: 4px;
+  border-radius: 0.625em;
+  white-space: nowrap;
+  max-width: min(100vw - 80px, 28em);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
-  .color-scheme-light & {
-    color: rgba(0, 0, 0, 0.55);
+html.color-scheme-light .BookmarkSectionBar .BookmarkSectionBar-link {
+  background-color: rgba(255, 255, 255, var(--title-opacity, 0.75));
+  color: #373737;
+}
 
-    &:hover {
-      color: rgba(0, 0, 0, 0.85);
-    }
+html.color-scheme-light .BookmarkSectionBar .BookmarkSectionBar-link:hover {
+  filter: brightness(0.96);
+}
 
-    &.active {
-      color: rgba(0, 0, 0, 0.95);
-      font-weight: 600;
-    }
-  }
+html.color-scheme-light .BookmarkSectionBar .BookmarkSectionBar-link.active {
+  font-weight: 600;
+  color: #212121;
+}
 
-  .color-scheme-dark & {
-    color: rgba(255, 255, 255, 0.65);
+html.color-scheme-dark .BookmarkSectionBar .BookmarkSectionBar-link {
+  background-color: rgba(55, 55, 55, var(--title-opacity, 0.75));
+  color: #eeeeee;
+}
 
-    &:hover {
-      color: rgba(255, 255, 255, 0.9);
-    }
+html.color-scheme-dark .BookmarkSectionBar .BookmarkSectionBar-link:hover {
+  filter: brightness(1.1);
+}
 
-    &.active {
-      color: #fff;
-      font-weight: 600;
-    }
-  }
+html.color-scheme-dark .BookmarkSectionBar .BookmarkSectionBar-link.active {
+  font-weight: 600;
+  color: #fff;
+}
 
-  &:focus-visible {
-    outline: 2px solid #1976d2;
-    outline-offset: 2px;
+html.color-scheme-light .BookmarkSectionBar .BookmarkSectionBar-link:focus-visible {
+  outline: none;
+  background-color: #1976d2;
+  color: #fff;
+}
 
-    .color-scheme-dark & {
-      outline-color: #90caf9;
-    }
-  }
+html.color-scheme-dark .BookmarkSectionBar .BookmarkSectionBar-link:focus-visible {
+  outline: none;
+  background-color: #90caf9;
+  color: #000;
 }

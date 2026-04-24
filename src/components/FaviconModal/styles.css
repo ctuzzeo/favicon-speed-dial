@@ -13,9 +13,13 @@
 
 .FaviconModal .favicon-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
   gap: 12px;
   margin-top: 8px;
+  max-height: min(52vh, 520px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 2px;
 }
 
 .FaviconModal .favicon-candidate {
