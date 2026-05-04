@@ -1,6 +1,5 @@
 import { clsx } from "clsx/lite";
 import { observer } from "mobx-react-lite";
-import { useEffect, useState } from "react";
 
 import "./styles.css";
 
@@ -8,7 +7,6 @@ import { About } from "#components/About";
 import { ColorPicker } from "#components/ColorPicker";
 import { CaretDown } from "#components/icons/CaretDown.tsx";
 import { wallpapers } from "#lib/wallpapers";
-import { bookmarks } from "#stores/useBookmarks";
 import { colorPicker } from "#stores/useColorPicker";
 import { settings } from "#stores/useSettings";
 import { Switch } from "./Switch.tsx";
@@ -17,7 +15,6 @@ export const SettingsContent = observer(function SettingsContent() {
   const {
     handleCustomColor,
     handleCustomImage,
-    handleDefaultFolder,
     handleDialSize,
     handleMaxColumns,
     handleNewTab,
@@ -36,7 +33,6 @@ export const SettingsContent = observer(function SettingsContent() {
     saveToJSON,
   } = settings;
 
-  const [defaultFolderValue, setDefaultFolderValue] = useState("");
   const wallpaperColors = [
     "Light",
     "Dark",
@@ -46,26 +42,6 @@ export const SettingsContent = observer(function SettingsContent() {
     "Green",
     "Pink",
   ];
-
-  useEffect(() => {
-    const setDefaultFolder = async () => {
-      const isValid =
-        settings.defaultFolder && typeof settings.defaultFolder === "string"
-          ? await bookmarks.validateFolderExists(settings.defaultFolder)
-          : false;
-      const value = isValid
-        ? settings.defaultFolder
-        : await bookmarks.getBookmarksBarId();
-      setDefaultFolderValue(value as string);
-    };
-    setDefaultFolder();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settings.defaultFolder]);
-
-  function getImageUrl(thumbnail: string) {
-    return new URL(`/src/assets/wallpaper-thumbs/${thumbnail}`, import.meta.url)
-      .href;
-  }
 
   return (
     <>
@@ -104,7 +80,7 @@ export const SettingsContent = observer(function SettingsContent() {
                 settings.wallpaper === id ? "selected" : false,
               )}
               style={{
-                backgroundImage: `url(${getImageUrl(thumbnail)})`,
+                backgroundImage: `url(${thumbnail})`,
               }}
               title={title}
               onClick={() => {
@@ -191,32 +167,6 @@ export const SettingsContent = observer(function SettingsContent() {
       </div>
       <div className="setting-wrapper setting-group">
         <div className="setting-label">
-          <div className="setting-title" id="default-folder-title">
-            Default Folder
-          </div>
-          <div className="setting-description" id="default-folder-description">
-            Select the bookmark folder used to display your speed dials.
-          </div>
-        </div>
-        <div className="setting-option select">
-          <select
-            onChange={(e) => handleDefaultFolder(e.target.value)}
-            value={defaultFolderValue}
-            className="input"
-            aria-labelledby="default-folder-title"
-            aria-describedby="default-folder-description"
-          >
-            {bookmarks.folders.map(({ id, title }) => (
-              <option value={id} key={id}>
-                {title}
-              </option>
-            ))}
-          </select>
-          <CaretDown />
-        </div>
-      </div>
-      <div className="setting-wrapper setting-group">
-        <div className="setting-label">
           <div className="setting-title" id="remember-last-folder-title">
             Remember last opened folder
           </div>
@@ -224,7 +174,8 @@ export const SettingsContent = observer(function SettingsContent() {
             className="setting-description"
             id="remember-last-folder-description"
           >
-            Reopen the last folder after restart. URL hash on this page wins if set.
+            Reopen the last folder after restart. URL hash on this page wins if
+            set.
           </div>
         </div>
         <div className="setting-option toggle">
@@ -297,8 +248,8 @@ export const SettingsContent = observer(function SettingsContent() {
             className="setting-description"
             id="external-favicon-providers-description"
           >
-            Use third-party hosts (e.g. Google) for sharper icons. Off: first-party +
-            Chrome favicon cache only.
+            Use third-party hosts (e.g. Google) for sharper icons. Off:
+            first-party + Chrome favicon cache only.
           </div>
         </div>
         <div className="setting-option toggle">
@@ -323,7 +274,8 @@ export const SettingsContent = observer(function SettingsContent() {
             Sync Settings
           </div>
           <div className="setting-description" id="sync-settings-description">
-            Synchronize your settings across devices when signed into your browser account.
+            Synchronize your settings across devices when signed into your
+            browser account.
           </div>
         </div>
         <div className="setting-option toggle">
@@ -368,7 +320,8 @@ export const SettingsContent = observer(function SettingsContent() {
             className="setting-description"
             id="bookmark-section-bar-description"
           >
-            Top bar to jump between Bookmarks bar, Other bookmarks, etc., when available.
+            Top bar to jump between Bookmarks bar, Other bookmarks, etc., when
+            available.
           </div>
         </div>
         <div className="setting-option toggle">
@@ -403,7 +356,19 @@ export const SettingsContent = observer(function SettingsContent() {
             aria-describedby="max-cols-description"
           >
             {[
-              "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "Unlimited",
+              "1",
+              "2",
+              "3",
+              "4",
+              "5",
+              "6",
+              "7",
+              "8",
+              "9",
+              "10",
+              "11",
+              "12",
+              "Unlimited",
             ].map((n) => (
               <option value={n} key={n}>
                 {n}
@@ -513,7 +478,9 @@ export const SettingsContent = observer(function SettingsContent() {
             aria-labelledby="title-opacity-title"
             aria-describedby="title-opacity-description"
           />
-          <span className="slider-value">{Math.round(settings.titleOpacity * 100)}%</span>
+          <span className="slider-value">
+            {Math.round(settings.titleOpacity * 100)}%
+          </span>
         </div>
       </div>
       <div className="setting-wrapper setting-group">
@@ -544,7 +511,10 @@ export const SettingsContent = observer(function SettingsContent() {
           <div className="setting-title" id="reset-backup-restore-title">
             Backup and Restore
           </div>
-          <div className="setting-description" id="reset-backup-restore-description">
+          <div
+            className="setting-description"
+            id="reset-backup-restore-description"
+          >
             Save a file with all your settings.
           </div>
         </div>
@@ -552,7 +522,11 @@ export const SettingsContent = observer(function SettingsContent() {
           <button type="button" className="btn defaultBtn" onClick={saveToJSON}>
             Backup
           </button>
-          <button type="button" className="btn defaultBtn" onClick={restoreFromJSON}>
+          <button
+            type="button"
+            className="btn defaultBtn"
+            onClick={restoreFromJSON}
+          >
             Restore
           </button>
         </div>
@@ -567,7 +541,11 @@ export const SettingsContent = observer(function SettingsContent() {
           </div>
         </div>
         <div className="setting-option reset">
-          <button type="button" className="btn defaultBtn" onClick={resetSettings}>
+          <button
+            type="button"
+            className="btn defaultBtn"
+            onClick={resetSettings}
+          >
             Reset
           </button>
         </div>

@@ -25,6 +25,11 @@ export default tseslint.config([
         __DEMO__: "readonly",
       },
     },
+    settings: {
+      react: {
+        version: "detect",
+      },
+    },
   },
   {
     files: ["vite.config.*", "*.config.*", "*.cjs", "*.mjs"],

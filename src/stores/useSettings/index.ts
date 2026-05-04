@@ -50,32 +50,64 @@ type BingWallpaperMessageResponse =
   | { success: true; data: { images: Array<{ url?: string }> } }
   | { success: false; error?: string };
 
-function readStorageString(snapshot: StorageSnapshot, key: string, fallback: string) {
+const syncedStorageKeyToSettingKey: Record<
+  string,
+  keyof typeof defaultSettings
+> = {
+  "bookmark-section-bar": "showBookmarkSectionBar",
+  "external-favicon-providers": "enableExternalFaviconProviders",
+};
+
+function readStorageString(
+  snapshot: StorageSnapshot,
+  key: string,
+  fallback: string,
+) {
   const v = snapshot[key];
   return typeof v === "string" ? v : fallback;
 }
 
-function readStorageStringOrFallback(snapshot: StorageSnapshot, key: string, fallback: string) {
+function readStorageStringOrFallback(
+  snapshot: StorageSnapshot,
+  key: string,
+  fallback: string,
+) {
   const v = readStorageString(snapshot, key, "");
   return v || fallback;
 }
 
-function readStorageBoolean(snapshot: StorageSnapshot, key: string, fallback: boolean) {
+function readStorageBoolean(
+  snapshot: StorageSnapshot,
+  key: string,
+  fallback: boolean,
+) {
   const v = snapshot[key];
   return typeof v === "boolean" ? v : fallback;
 }
 
-function readStorageNumberOr(snapshot: StorageSnapshot, key: string, fallback: number) {
+function readStorageNumberOr(
+  snapshot: StorageSnapshot,
+  key: string,
+  fallback: number,
+) {
   const v = snapshot[key];
   return typeof v === "number" && !Number.isNaN(v) ? v || fallback : fallback;
 }
 
-function readStorageNumber(snapshot: StorageSnapshot, key: string, fallback: number) {
+function readStorageNumber(
+  snapshot: StorageSnapshot,
+  key: string,
+  fallback: number,
+) {
   const v = snapshot[key];
   return typeof v === "number" && !Number.isNaN(v) ? v : fallback;
 }
 
-function readStorageRecord<T extends Record<string, unknown>>(snapshot: StorageSnapshot, key: string, fallback: T): T {
+function readStorageRecord<T extends Record<string, unknown>>(
+  snapshot: StorageSnapshot,
+  key: string,
+  fallback: T,
+): T {
   const v = snapshot[key];
   return v && typeof v === "object" && !Array.isArray(v) ? (v as T) : fallback;
 }
@@ -129,14 +161,21 @@ export const settings = makeAutoObservable({
 
   async initialize() {
     try {
-      const localStorage = (await browser.storage.local.get()) as StorageSnapshot;
-      const syncStorage = (await (browser.storage.sync
+      const localStorage =
+        (await browser.storage.local.get()) as StorageSnapshot;
+      const localSyncEnabled = readStorageBoolean(
+        localStorage,
+        `${apiVersion}-enable-sync`,
+        defaultSettings.enableSync,
+      );
+      const syncStorage = (await (localSyncEnabled && browser.storage.sync
         ? browser.storage.sync.get()
         : Promise.resolve({}))) as StorageSnapshot;
 
       const storage: StorageSnapshot = { ...localStorage, ...syncStorage };
       const lastVersion =
-        semverCoerce(readStorageString(storage, "last-version", ""))?.version || false;
+        semverCoerce(readStorageString(storage, "last-version", ""))?.version ||
+        false;
       const isUpgrade = lastVersion && semverGt(appVersion, lastVersion);
       browser.storage.local.set({ "last-version": appVersion });
 
@@ -176,20 +215,36 @@ export const settings = makeAutoObservable({
           `${apiVersion}-max-columns`,
           defaultSettings.maxColumns,
         );
-        settings.newTab = readStorageBoolean(storage, `${apiVersion}-new-tab`, defaultSettings.newTab);
-        settings.enableSync = readStorageBoolean(
+        settings.newTab = readStorageBoolean(
           storage,
+          `${apiVersion}-new-tab`,
+          defaultSettings.newTab,
+        );
+        settings.enableSync = readStorageBoolean(
+          localStorage,
           `${apiVersion}-enable-sync`,
           defaultSettings.enableSync,
         );
-        settings.columnGap = readStorageNumberOr(storage, `${apiVersion}-column-gap`, defaultSettings.columnGap);
-        settings.rowGap = readStorageNumberOr(storage, `${apiVersion}-row-gap`, defaultSettings.rowGap);
+        settings.columnGap = readStorageNumberOr(
+          storage,
+          `${apiVersion}-column-gap`,
+          defaultSettings.columnGap,
+        );
+        settings.rowGap = readStorageNumberOr(
+          storage,
+          `${apiVersion}-row-gap`,
+          defaultSettings.rowGap,
+        );
         settings.titleOpacity = readStorageNumber(
           storage,
           `${apiVersion}-title-opacity`,
           defaultSettings.titleOpacity,
         );
-        settings.titleSize = readStorageNumber(storage, `${apiVersion}-title-size`, defaultSettings.titleSize);
+        settings.titleSize = readStorageNumber(
+          storage,
+          `${apiVersion}-title-size`,
+          defaultSettings.titleSize,
+        );
         settings.themeOption = readStorageStringOrFallback(
           storage,
           `${apiVersion}-theme-option`,
@@ -205,7 +260,9 @@ export const settings = makeAutoObservable({
           `${apiVersion}-bing-wallpaper-url`,
           "",
         );
-        settings.bingDebugInfo = settings.bingWallpaperUrl ? "Loaded from cache" : "No image yet";
+        settings.bingDebugInfo = settings.bingWallpaperUrl
+          ? "Loaded from cache"
+          : "No image yet";
         settings.squareDials = readStorageBoolean(
           storage,
           `${apiVersion}-square-dials`,
@@ -254,7 +311,6 @@ export const settings = makeAutoObservable({
       if (settings.wallpaper === "bing-wallpaper") {
         settings.fetchBingWallpaper();
       }
-
     } catch (error) {
       console.error("Initialization failed", error);
       runInAction(() => {
@@ -267,7 +323,7 @@ export const settings = makeAutoObservable({
     const storageKey = `${apiVersion}-${key}`;
     browser.storage.local.set({ [storageKey]: value });
     if (sync && settings.enableSync && browser.storage.sync) {
-      browser.storage.sync.set({ [storageKey]: value }).catch(err => {
+      browser.storage.sync.set({ [storageKey]: value }).catch((err) => {
         console.warn("Sync failed (possibly quota exceeded):", err);
       });
     }
@@ -432,15 +488,19 @@ export const settings = makeAutoObservable({
 
   async fetchBingWallpaper() {
     try {
-      runInAction(() => { settings.bingDebugInfo = "Requesting image via Background Service..."; });
-      
+      runInAction(() => {
+        settings.bingDebugInfo = "Requesting image via Background Service...";
+      });
+
       const response = (await browser.runtime.sendMessage({
         type: "FETCH_BING_WALLPAPER",
       })) as BingWallpaperMessageResponse | undefined | null;
 
       if (!response || !response.success) {
         throw new Error(
-          response && "error" in response ? response.error : "Failed to communicate with Background Service",
+          response && "error" in response
+            ? response.error
+            : "Failed to communicate with Background Service",
         );
       }
 
@@ -598,7 +658,10 @@ autorun(() => {
   // Use removeProperty to allow CSS classes to take over for presets
   if (settings.wallpaper === "custom-image" && settings.customImage) {
     root.style.backgroundImage = `url(${settings.customImage})`;
-  } else if (settings.wallpaper === "bing-wallpaper" && settings.bingWallpaperUrl) {
+  } else if (
+    settings.wallpaper === "bing-wallpaper" &&
+    settings.bingWallpaperUrl
+  ) {
     root.style.backgroundImage = `url(${settings.bingWallpaperUrl})`;
   } else {
     root.style.removeProperty("background-image");
@@ -619,10 +682,13 @@ settings.initialize();
 // Listen for sync changes
 if (browser.storage.onChanged) {
   browser.storage.onChanged.addListener((changes, areaName) => {
-    if (areaName === "sync") {
+    if (areaName === "sync" && settings.enableSync) {
       runInAction(() => {
         for (const [key, { newValue }] of Object.entries(changes)) {
-          const settingKey = key.replace(`${apiVersion}-`, "").replace(/-([a-z])/g, (g) => g[1].toUpperCase());
+          const storageKey = key.replace(`${apiVersion}-`, "");
+          const settingKey =
+            syncedStorageKeyToSettingKey[storageKey] ??
+            storageKey.replace(/-([a-z])/g, (g) => g[1].toUpperCase());
           if (settingKey in settings) {
             set(
               settings,

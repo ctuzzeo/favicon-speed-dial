@@ -5,7 +5,6 @@ import Sortable from "sortablejs";
 
 import "./styles.css";
 
-import { runInAction } from "mobx";
 import { contrastRatio } from "random-color-library";
 
 import { BookmarkSectionBar } from "#components/BookmarkSectionBar";
@@ -251,10 +250,10 @@ export const Grid = observer(function Grid() {
           return;
         }
         const draggedId = e.item.dataset.id;
-        const droppedId = (e.originalEvent?.target as HTMLElement | null)
-          ?.dataset.id;
-        const droppedType = (e.originalEvent?.target as HTMLElement | null)
-          ?.dataset.type;
+        const originalTarget = e.originalEvent?.target as HTMLElement | null;
+        const targetElement = originalTarget?.closest<HTMLElement>("[data-id]");
+        const droppedId = targetElement?.dataset.id;
+        const droppedType = targetElement?.dataset.type;
 
         // Check if the drop happened on the breadcrumb.
         const breadcrumbElement = breadcrumbsRef.current;
@@ -270,12 +269,10 @@ export const Grid = observer(function Grid() {
           });
         } else if (
           droppedId &&
+          droppedId !== draggedId &&
           (droppedType === "folder" || droppedType === "bookmark")
         ) {
           // Check if the drop happened in the middle third of the target
-          const targetElement = (
-            e.originalEvent?.target as HTMLElement | null
-          )?.closest("[data-id]");
           if (targetElement && e.originalEvent) {
             const rect = targetElement.getBoundingClientRect();
             const x = e.originalEvent.clientX - rect.left;
@@ -288,34 +285,30 @@ export const Grid = observer(function Grid() {
                   parentId: droppedId,
                 });
               } else if (droppedType === "bookmark" && draggedId && droppedId) {
-                runInAction(async () => {
-                  // Create a new folder inside the current folder.
-                  const newFolder = await bookmarks.createBookmark({
-                    title: "New Folder",
-                    parentId: bookmarks.currentFolder.id,
-                  });
-                  const newFolderId = newFolder.id;
-                  // Move the new folder to the position of the drop.
-                  bookmarks.moveBookmark({
-                    id: newFolderId,
-                    // Find the index of the added bookmark.
-                    // The new index returned by the API may not be the literal index.
-                    // There are sometimes skipped indices.
-                    from: bookmarks.bookmarks.length - 1,
-                    to: bookmarks.bookmarks.findIndex(
-                      (b) => b.id === droppedId,
-                    ),
-                  });
-                  // Move the dragged item inside the new folder.
-                  bookmarks.moveBookmark({
-                    id: draggedId,
-                    parentId: newFolderId,
-                  });
-                  // Move the dropped-on bookmark inside the new folder.
-                  bookmarks.moveBookmark({
-                    id: droppedId,
-                    parentId: newFolderId,
-                  });
+                // Create a new folder inside the current folder.
+                const newFolder = await bookmarks.createBookmark({
+                  title: "New Folder",
+                  parentId: bookmarks.currentFolder.id,
+                });
+                const newFolderId = newFolder.id;
+                // Move the new folder to the position of the drop.
+                bookmarks.moveBookmark({
+                  id: newFolderId,
+                  // Find the index of the added bookmark.
+                  // The new index returned by the API may not be the literal index.
+                  // There are sometimes skipped indices.
+                  from: bookmarks.bookmarks.length - 1,
+                  to: bookmarks.bookmarks.findIndex((b) => b.id === droppedId),
+                });
+                // Move the dragged item inside the new folder.
+                bookmarks.moveBookmark({
+                  id: draggedId,
+                  parentId: newFolderId,
+                });
+                // Move the dropped-on bookmark inside the new folder.
+                bookmarks.moveBookmark({
+                  id: droppedId,
+                  parentId: newFolderId,
                 });
               }
             }
@@ -335,6 +328,16 @@ export const Grid = observer(function Grid() {
   return (
     <div
       className={clsx("GridContainer", showSectionBar && "has-section-bar")}
+      style={
+        {
+          "--grid-max-cols":
+            settings.maxColumns === "Unlimited" ? "999" : settings.maxColumns,
+          "--grid-column-gap-setting": `${settings.columnGap}px`,
+          "--grid-row-gap-setting": `${settings.rowGap}px`,
+          "--grid-column-gap-value": settings.columnGap / 16,
+          "--grid-row-gap-value": settings.rowGap / 16,
+        } as React.CSSProperties
+      }
     >
       <BookmarkSectionBar />
       <SettingsGear gearColor={gearColor} />
@@ -373,16 +376,6 @@ export const Grid = observer(function Grid() {
           isMaxFontSize && "max-width",
         )}
         id="sortable"
-        style={
-          {
-            "--grid-max-cols":
-              settings.maxColumns === "Unlimited" ? "999" : settings.maxColumns,
-            "--grid-column-gap-setting": `${settings.columnGap}px`,
-            "--grid-row-gap-setting": `${settings.rowGap}px`,
-            "--grid-column-gap-value": settings.columnGap / 16,
-            "--grid-row-gap-value": settings.rowGap / 16,
-          } as React.CSSProperties
-        }
         ref={gridRef}
       >
         <Dials />
