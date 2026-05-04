@@ -133,7 +133,6 @@ const defaultSettings = {
   firstRun: true,
   maxColumns: "7",
   newTab: true,
-  showAlertBanner: true,
   squareDials: true,
   enableSync: true,
   columnGap: 28,
@@ -290,7 +289,6 @@ export const settings = makeAutoObservable({
         );
         settings.colorScheme = getColorScheme(settings.themeOption);
         settings.firstRun = !lastVersion;
-        settings.showAlertBanner = Boolean(!lastVersion || isUpgrade);
         settings.isLoaded = true;
       });
 
@@ -581,12 +579,6 @@ export const settings = makeAutoObservable({
     settings.titleSize = value;
     settings._saveSetting("title-size", value);
     bc.postMessage({ titleSize: value });
-  },
-
-  hideAlertBanner() {
-    runInAction(() => {
-      settings.showAlertBanner = false;
-    });
   },
 
   handleSquareDials(value: boolean) {
