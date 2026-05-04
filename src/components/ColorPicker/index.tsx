@@ -19,6 +19,7 @@ export const ColorPicker = observer(function ColorPicker({
 }: ColorPickerProps) {
   const pickerRef = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState({ left: 0, top: 0 });
+  const anchor = colorPicker.anchor;
 
   useEffect(() => {
     // Set focus to color picker.
@@ -28,7 +29,6 @@ export const ColorPicker = observer(function ColorPicker({
   }, []);
 
   useLayoutEffect(() => {
-    const anchor = colorPicker.anchor;
     const picker = pickerRef.current;
     if (!anchor || !picker) return;
 
@@ -45,7 +45,7 @@ export const ColorPicker = observer(function ColorPicker({
       left: anchor.offsetLeft,
       top: shouldOpenAbove ? aboveTop : belowTop,
     });
-  }, [colorPicker.anchor]);
+  }, [anchor]);
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
     e.stopPropagation();

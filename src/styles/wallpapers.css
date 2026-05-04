@@ -188,4 +188,18 @@
       color: #000;
     }
   }
+
+  &.LavaWavesBlue {
+    background-image: url(/wallpapers/lavawaves_blue.png);
+    .gear-button {
+      color: #fff;
+    }
+  }
+
+  &.LavaWavesYellow {
+    background-image: url(/wallpapers/lavawaves_yellow.png);
+    .gear-button {
+      color: #000;
+    }
+  }
 }
