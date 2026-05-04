@@ -4,7 +4,6 @@ import { useEffect, useRef } from "react";
 import "./styles.css";
 
 import { AboutModal } from "#components/AboutModal";
-import { AlertBanner } from "#components/AlertBanner";
 import { BookmarkModal } from "#components/BookmarkModal";
 import { ContextMenu } from "#components/ContextMenu";
 import { Grid } from "#components/Grid";
@@ -14,7 +13,6 @@ import { WhatsNewModal } from "#components/WhatsNewModal";
 import { bookmarks } from "#stores/useBookmarks";
 import { contextMenu } from "#stores/useContextMenu";
 import { modals } from "#stores/useModals";
-import { settings } from "#stores/useSettings";
 import { focusSafely } from "#utils/focus";
 
 export const Bookmarks = observer(function Bookmarks() {
@@ -68,7 +66,6 @@ export const Bookmarks = observer(function Bookmarks() {
         inert={!!modals.isOpen}
         ref={focusRef}
       >
-        {settings.showAlertBanner && <AlertBanner />}
         <Grid />
       </div>
     </>
