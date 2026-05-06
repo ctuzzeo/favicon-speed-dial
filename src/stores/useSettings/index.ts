@@ -1,7 +1,6 @@
 import { clsx } from "clsx/lite";
 import { autorun, makeAutoObservable, remove, runInAction, set } from "mobx";
 import semverCoerce from "semver/functions/coerce";
-import semverGt from "semver/functions/gt";
 import browser from "webextension-polyfill";
 
 import {
@@ -54,7 +53,6 @@ const syncedStorageKeyToSettingKey: Record<
   string,
   keyof typeof defaultSettings
 > = {
-  "bookmark-section-bar": "showBookmarkSectionBar",
   "external-favicon-providers": "enableExternalFaviconProviders",
 };
 
@@ -143,8 +141,6 @@ const defaultSettings = {
   wallpaper: prefersDarkMode() ? "dark-wallpaper" : "light-wallpaper",
   bingWallpaperUrl: "",
   bingDebugInfo: "",
-  /** Show a bar to jump between top-level bookmark locations (toolbar, other bookmarks, etc.). */
-  showBookmarkSectionBar: true,
   /** Restore the last-opened folder on new tab (localStorage); URL hash still wins when set. */
   rememberLastFolder: true,
   /**
@@ -175,7 +171,6 @@ export const settings = makeAutoObservable({
       const lastVersion =
         semverCoerce(readStorageString(storage, "last-version", ""))?.version ||
         false;
-      const isUpgrade = lastVersion && semverGt(appVersion, lastVersion);
       browser.storage.local.set({ "last-version": appVersion });
 
       runInAction(() => {
@@ -266,11 +261,6 @@ export const settings = makeAutoObservable({
           storage,
           `${apiVersion}-square-dials`,
           defaultSettings.squareDials,
-        );
-        settings.showBookmarkSectionBar = readStorageBoolean(
-          storage,
-          `${apiVersion}-bookmark-section-bar`,
-          defaultSettings.showBookmarkSectionBar,
         );
         settings.rememberLastFolder = readStorageBoolean(
           storage,
@@ -585,12 +575,6 @@ export const settings = makeAutoObservable({
     settings.squareDials = value;
     settings._saveSetting("square-dials", value);
     bc.postMessage({ squareDials: value });
-  },
-
-  handleShowBookmarkSectionBar(value: boolean) {
-    settings.showBookmarkSectionBar = value;
-    settings._saveSetting("bookmark-section-bar", value);
-    bc.postMessage({ showBookmarkSectionBar: value });
   },
 
   handleRememberLastFolder(value: boolean) {

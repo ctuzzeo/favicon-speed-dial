@@ -40,8 +40,7 @@ export const Grid = observer(function Grid() {
       bookmarks.currentFolder.id === settings.defaultFolder) ||
     !bookmarks.parentId;
 
-  const showSectionBar =
-    settings.showBookmarkSectionBar && bookmarks.rootSections.length >= 2;
+  const showSectionBar = bookmarks.rootSections.length >= 2;
 
   // Check if font size is at maximum (1.6em) for scale mode.
   // This is used to determine if the grid should have a max-width applied.

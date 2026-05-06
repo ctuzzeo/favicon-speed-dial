@@ -26,7 +26,6 @@ export const SettingsContent = observer(function SettingsContent() {
     handleTitleSize,
     handleThemeOption,
     handleWallpaper,
-    handleShowBookmarkSectionBar,
     handleRememberLastFolder,
     resetSettings,
     restoreFromJSON,
@@ -306,33 +305,6 @@ export const SettingsContent = observer(function SettingsContent() {
             onClick={() => settings.handleSquareDials(!settings.squareDials)}
             className="switch-root"
             checked={settings.squareDials as boolean}
-          >
-            <span className="switch-thumb" />
-          </Switch>
-        </div>
-      </div>
-      <div className="setting-wrapper setting-group">
-        <div className="setting-label">
-          <div className="setting-title" id="bookmark-section-bar-title">
-            Bookmark section bar
-          </div>
-          <div
-            className="setting-description"
-            id="bookmark-section-bar-description"
-          >
-            Top bar to jump between Bookmarks bar, Other bookmarks, etc., when
-            available.
-          </div>
-        </div>
-        <div className="setting-option toggle">
-          <Switch
-            aria-labelledby="bookmark-section-bar-title"
-            aria-describedby="bookmark-section-bar-description"
-            onClick={() =>
-              handleShowBookmarkSectionBar(!settings.showBookmarkSectionBar)
-            }
-            className="switch-root"
-            checked={settings.showBookmarkSectionBar as boolean}
           >
             <span className="switch-thumb" />
           </Switch>

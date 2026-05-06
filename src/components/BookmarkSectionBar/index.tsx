@@ -8,10 +8,7 @@ import { settings } from "#stores/useSettings";
 import "./styles.css";
 
 export const BookmarkSectionBar = observer(function BookmarkSectionBar() {
-  if (
-    !settings.showBookmarkSectionBar ||
-    bookmarks.rootSections.length < 2
-  ) {
+  if (bookmarks.rootSections.length < 2) {
     return null;
   }
 
