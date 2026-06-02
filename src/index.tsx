@@ -2,6 +2,8 @@ import { reaction, when } from "mobx";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
+import { AppReady } from "#components/AppReady";
+import { ErrorBoundary } from "#components/ErrorBoundary";
 import { startFaviconPrefetchOnce } from "#lib/faviconPrefetch";
 import { Bookmarks } from "#pages/Bookmarks";
 import { bookmarks } from "#stores/useBookmarks";
@@ -64,10 +66,16 @@ async function initializeApp() {
   );
 }
 
-initializeApp();
+initializeApp().catch((error) => {
+  console.error("Failed to initialize app", error);
+});
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <Bookmarks />
+    <ErrorBoundary>
+      <AppReady>
+        <Bookmarks />
+      </AppReady>
+    </ErrorBoundary>
   </StrictMode>,
 );

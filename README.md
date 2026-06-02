@@ -25,6 +25,31 @@ This fork is **not** an official release by Lucas Everett; it is an independent 
 
 Source code for this fork: **https://github.com/ctuzzeo/favicon-speed-dial**
 
+## Permissions
+
+On install you may see a warning that the extension can "read your data on all
+websites." That is the broad host permission (`https://*/*` and `http://*/*`),
+and here is exactly what it is for:
+
+- **Host permissions (`https://*/*`, `http://*/*`)** — so the new tab page can
+  fetch favicons and web-app manifests **directly from the sites you have
+  bookmarked**, producing sharper icons than a single favicon service can. The
+  extension runs **no content scripts** and does **not** read page contents,
+  form data, or browsing history.
+- **`bookmarks`** — to read and edit your bookmarks (the grid is your bookmark
+  tree).
+- **`storage`** / **`unlimitedStorage`** — to save your settings and cache
+  favicons locally (and sync small settings across devices when you enable
+  Sync).
+- **`favicon`** (Chrome only) — to read Chrome's built-in favicon cache via
+  `/_favicon/` for fast, offline-friendly icons.
+- **`https://www.bing.com/*`** — only used when you choose the Bing daily
+  wallpaper, to fetch that day's image URL.
+
+If you prefer to avoid third-party favicon services entirely, turn off
+**External favicon providers** in Settings; the extension then uses only
+first-party assets and Chrome's favicon cache.
+
 ## Bundled wallpaper images
 
 Built-in full-size wallpapers are stored in **`public/wallpapers/`** in this repo and referenced from CSS as **`/wallpapers/…`**. They ship **inside** the extension (or demo build), so the new tab page does not depend on Lucas’s old `media.easyspeeddial.com` CDN.

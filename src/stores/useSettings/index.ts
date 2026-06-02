@@ -1,12 +1,19 @@
 import { clsx } from "clsx/lite";
 import { autorun, makeAutoObservable, remove, runInAction, set } from "mobx";
-import semverCoerce from "semver/functions/coerce";
 import browser from "webextension-polyfill";
 
 import {
   assertBingCdnHttpsUrl,
   buildBingWallpaperUrlFromHpApiPath,
 } from "#lib/bingWallpaperUrl";
+import {
+  readStorageBoolean,
+  readStorageNumber,
+  readStorageRecord,
+  readStorageString,
+  readStorageStringOrFallback,
+  type StorageSnapshot,
+} from "#lib/storageReaders";
 
 // ==================================================================
 // SETUP
@@ -35,6 +42,11 @@ function prefersDarkMode() {
   return window.matchMedia("(prefers-color-scheme: dark)").matches;
 }
 
+/** Local date as YYYY-MM-DD, used to fetch the Bing wallpaper at most once/day. */
+function todayDateString() {
+  return new Date().toISOString().split("T")[0];
+}
+
 function getColorScheme(value: string) {
   return (value === "System Theme" && prefersDarkMode()) || value === "Dark"
     ? "color-scheme-dark"
@@ -42,8 +54,6 @@ function getColorScheme(value: string) {
 }
 
 const bc = new BroadcastChannel("favicon-speed-dial-settings");
-
-type StorageSnapshot = Record<string, unknown>;
 
 type BingWallpaperMessageResponse =
   | { success: true; data: { images: Array<{ url?: string }> } }
@@ -55,60 +65,6 @@ const syncedStorageKeyToSettingKey: Record<
 > = {
   "external-favicon-providers": "enableExternalFaviconProviders",
 };
-
-function readStorageString(
-  snapshot: StorageSnapshot,
-  key: string,
-  fallback: string,
-) {
-  const v = snapshot[key];
-  return typeof v === "string" ? v : fallback;
-}
-
-function readStorageStringOrFallback(
-  snapshot: StorageSnapshot,
-  key: string,
-  fallback: string,
-) {
-  const v = readStorageString(snapshot, key, "");
-  return v || fallback;
-}
-
-function readStorageBoolean(
-  snapshot: StorageSnapshot,
-  key: string,
-  fallback: boolean,
-) {
-  const v = snapshot[key];
-  return typeof v === "boolean" ? v : fallback;
-}
-
-function readStorageNumberOr(
-  snapshot: StorageSnapshot,
-  key: string,
-  fallback: number,
-) {
-  const v = snapshot[key];
-  return typeof v === "number" && !Number.isNaN(v) ? v || fallback : fallback;
-}
-
-function readStorageNumber(
-  snapshot: StorageSnapshot,
-  key: string,
-  fallback: number,
-) {
-  const v = snapshot[key];
-  return typeof v === "number" && !Number.isNaN(v) ? v : fallback;
-}
-
-function readStorageRecord<T extends Record<string, unknown>>(
-  snapshot: StorageSnapshot,
-  key: string,
-  fallback: T,
-): T {
-  const v = snapshot[key];
-  return v && typeof v === "object" && !Array.isArray(v) ? (v as T) : fallback;
-}
 
 // ==================================================================
 // SETTINGS STORE
@@ -128,7 +84,6 @@ const defaultSettings = {
   manualFavicons: {} as ManualFavicons,
   dialSize: "small",
   dialTransparent: {} as Record<string, boolean>,
-  firstRun: true,
   maxColumns: "7",
   newTab: true,
   squareDials: true,
@@ -168,9 +123,8 @@ export const settings = makeAutoObservable({
         : Promise.resolve({}))) as StorageSnapshot;
 
       const storage: StorageSnapshot = { ...localStorage, ...syncStorage };
-      const lastVersion =
-        semverCoerce(readStorageString(storage, "last-version", ""))?.version ||
-        false;
+      // Record the current version for backup recognition and possible future
+      // upgrade detection. Nothing reads it back at runtime today.
       browser.storage.local.set({ "last-version": appVersion });
 
       runInAction(() => {
@@ -219,12 +173,12 @@ export const settings = makeAutoObservable({
           `${apiVersion}-enable-sync`,
           defaultSettings.enableSync,
         );
-        settings.columnGap = readStorageNumberOr(
+        settings.columnGap = readStorageNumber(
           storage,
           `${apiVersion}-column-gap`,
           defaultSettings.columnGap,
         );
-        settings.rowGap = readStorageNumberOr(
+        settings.rowGap = readStorageNumber(
           storage,
           `${apiVersion}-row-gap`,
           defaultSettings.rowGap,
@@ -278,7 +232,6 @@ export const settings = makeAutoObservable({
           defaultSettings.dialTransparent,
         );
         settings.colorScheme = getColorScheme(settings.themeOption);
-        settings.firstRun = !lastVersion;
         settings.isLoaded = true;
       });
 
@@ -295,8 +248,18 @@ export const settings = makeAutoObservable({
         }
       }
 
-      // Fetch Bing if active
-      if (settings.wallpaper === "bing-wallpaper") {
+      // Fetch Bing only when stale. Bing updates once/day and the cached URL is
+      // already applied above, so skip the network call when today's image is
+      // cached. An explicit click on "Bing Image" always refetches.
+      const cachedBingDate = readStorageString(
+        storage,
+        `${apiVersion}-bing-wallpaper-date`,
+        "",
+      );
+      if (
+        settings.wallpaper === "bing-wallpaper" &&
+        (!settings.bingWallpaperUrl || cachedBingDate !== todayDateString())
+      ) {
         settings.fetchBingWallpaper();
       }
     } catch (error) {
@@ -349,7 +312,9 @@ export const settings = makeAutoObservable({
               settings.customImage = blobUrl;
               settings.wallpaper = "custom-image";
             });
-            settings._saveSetting("custom-image", base64);
+            // custom images are base64 and exceed the storage.sync per-item
+            // quota, so keep them local-only (sync=false).
+            settings._saveSetting("custom-image", base64, false);
             settings._saveSetting("wallpaper", "custom-image");
             bc.postMessage({ customImage: blobUrl, wallpaper: "custom-image" });
           } catch (err) {
@@ -385,7 +350,9 @@ export const settings = makeAutoObservable({
       runInAction(() => {
         delete settings.dialImages[id];
       });
-      settings._saveSetting("dial-images", { ...settings.dialImages });
+      // dial thumbnails are base64 and exceed the storage.sync per-item
+      // quota, so keep them local-only (sync=false).
+      settings._saveSetting("dial-images", { ...settings.dialImages }, false);
       bc.postMessage({ dialImages: { ...settings.dialImages } });
     }
   },
@@ -421,7 +388,13 @@ export const settings = makeAutoObservable({
           runInAction(() => {
             set(settings.dialImages, id, base64);
           });
-          settings._saveSetting("dial-images", { ...settings.dialImages });
+          // dial thumbnails are base64 and exceed the storage.sync per-item
+          // quota, so keep them local-only (sync=false).
+          settings._saveSetting(
+            "dial-images",
+            { ...settings.dialImages },
+            false,
+          );
           bc.postMessage({ dialImages: { ...settings.dialImages } });
         };
         reader.readAsDataURL(file);
@@ -452,11 +425,32 @@ export const settings = makeAutoObservable({
         reader.onload = async () => {
           try {
             const data = JSON.parse(reader.result as string);
+            const isPlainObject =
+              typeof data === "object" && data !== null && !Array.isArray(data);
+            // A real backup is a dump of storage.local, which always contains
+            // "last-version" plus our "2.0-" keys. Reject anything else BEFORE
+            // clearing, so a malformed file can't wipe the user's settings.
+            const looksLikeBackup =
+              isPlainObject &&
+              Object.keys(data).some(
+                (key) =>
+                  key === "last-version" || key.startsWith(`${apiVersion}-`),
+              );
+            if (!looksLikeBackup) {
+              throw new Error(
+                "This file is not a Favicon Speed Dial backup.",
+              );
+            }
             await browser.storage.local.clear();
-            await browser.storage.local.set(data);
+            await browser.storage.local.set(data as Record<string, unknown>);
             location.reload();
           } catch (err) {
             console.error("Failed to restore from JSON", err);
+            alert(
+              err instanceof Error
+                ? `Restore failed: ${err.message}`
+                : "Restore failed: the file could not be read.",
+            );
           }
         };
         reader.readAsText(file);
@@ -514,6 +508,7 @@ export const settings = makeAutoObservable({
         settings.bingWallpaperUrl = imageUrl;
         settings.bingDebugInfo = `Success! Image retrieved via Background.`;
         settings._saveSetting("bing-wallpaper-url", imageUrl, false);
+        settings._saveSetting("bing-wallpaper-date", todayDateString(), false);
       });
     } catch (error) {
       console.error("Error fetching Bing wallpaper:", error);
@@ -617,6 +612,10 @@ const isChrome = userAgent.includes("chrome");
 
 // Setup autorun BEFORE initialization
 autorun(() => {
+  // Don't paint theme/wallpaper from default settings before storage has been
+  // read; doing so caused a visible flash on cold boot (default wallpaper →
+  // real wallpaper). index.html shows a neutral background until isLoaded.
+  if (!settings.isLoaded) return;
   const root = document.documentElement;
   root.className = clsx(
     settings.colorScheme as string,

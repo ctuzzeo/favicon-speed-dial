@@ -98,23 +98,34 @@ export const bookmarks = makeAutoObservable({
 
     return newBookmark;
   },
-  deleteBookmark(id: string) {
-    browser.bookmarks.remove(id);
+  async deleteBookmark(id: string) {
     const indexToRemove = bookmarks.bookmarks.findIndex(
       (bookmark) => bookmark.id === id,
     );
     if (indexToRemove !== -1) bookmarks.bookmarks.splice(indexToRemove, 1);
-    settings.handleClearColor(id);
-    settings.handleClearThumbnail(id);
+    try {
+      await browser.bookmarks.remove(id);
+      settings.handleClearColor(id);
+      settings.handleClearThumbnail(id);
+    } catch (error) {
+      console.error("Failed to delete bookmark:", error);
+      // The optimistic removal no longer matches reality; re-pull the folder.
+      await bookmarks.changeFolder(bookmarks.currentFolder.id).catch(() => {});
+    }
   },
-  deleteFolder(id: string) {
-    browser.bookmarks.removeTree(id);
+  async deleteFolder(id: string) {
     const indexToRemove = bookmarks.bookmarks.findIndex(
       (bookmark) => bookmark.id === id,
     );
     if (indexToRemove !== -1) bookmarks.bookmarks.splice(indexToRemove, 1);
-    settings.handleClearColor(id);
-    settings.handleClearThumbnail(id);
+    try {
+      await browser.bookmarks.removeTree(id);
+      settings.handleClearColor(id);
+      settings.handleClearThumbnail(id);
+    } catch (error) {
+      console.error("Failed to delete folder:", error);
+      await bookmarks.changeFolder(bookmarks.currentFolder.id).catch(() => {});
+    }
   },
   async getBookmarksBarId() {
     let bookmarksBar = "1";
@@ -136,7 +147,7 @@ export const bookmarks = makeAutoObservable({
     const results = await browser.bookmarks.get(id);
     return results[0];
   },
-  moveBookmark({ id, from, to, parentId }: MoveBookmarkParams) {
+  async moveBookmark({ id, from, to, parentId }: MoveBookmarkParams) {
     const moveOptions: { index?: number; parentId?: string } = {};
 
     if (from !== undefined && to !== undefined) {
@@ -173,7 +184,14 @@ export const bookmarks = makeAutoObservable({
       bookmarks.bookmarks.splice(to, 0, bookmark);
     }
 
-    browser.bookmarks.move(id.toString(), moveOptions);
+    try {
+      await browser.bookmarks.move(id.toString(), moveOptions);
+    } catch (error) {
+      console.error("Failed to move bookmark:", error);
+      // A failed move fires no onMoved event, so the optimistic reorder above
+      // would stick; re-pull the current folder to restore the true order.
+      await bookmarks.changeFolder(bookmarks.currentFolder.id).catch(() => {});
+    }
   },
   async openAllWindow(id: string) {
     const urls = await browser.bookmarks.getSubTree(id);
@@ -299,16 +317,14 @@ if (__CHROME__) {
 function debounce<T extends (...args: unknown[]) => unknown>(
   func: T,
   wait: number,
-  immediate?: boolean,
 ): (...args: Parameters<T>) => void {
   let timeout: NodeJS.Timeout | null = null;
   return (...args: Parameters<T>) => {
     if (timeout) clearTimeout(timeout);
     timeout = setTimeout(() => {
       timeout = null;
-      if (!immediate) func(...args);
+      func(...args);
     }, wait);
-    if (immediate && !timeout) func(...args);
   };
 }
 
