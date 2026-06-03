@@ -14,8 +14,11 @@
  *
  * **Same-origin:** `favicon.svg`, `icon.svg`, `favicon.ico`, common
  * `apple-touch-icon-{180,152}…` paths, plus default apple-touch PNGs. If those miss,
- * a bounded HTML read collects **`<link rel="apple-touch-icon">`** hrefs (often on a
- * CDN). A successful **apple-touch** decode wins over manifest, mirrors, and native.
+ * a bounded HTML read collects declared **`<link rel="icon" / "apple-touch-icon" /
+ * "shortcut icon" / "alternate icon" / "fluid-icon">`** hrefs (Google, GitHub, Reddit
+ * and many others host these on a CDN they chose). Declared SVGs and apple-touch
+ * decodes win over manifest, mirrors, and native; declared raster icons compete by
+ * decoded size. `mask-icon` (a monochrome silhouette) is intentionally skipped.
  *
  * **Redirects (favicon):** resolve redirects once, then probe the saved URL and (when
  * it differs) the final URL in parallel and merge with {@link pickBestFavicon} — e.g.
@@ -24,9 +27,11 @@
  * `playstation.com`, then the full host). Multi-part suffixes like `co.uk` use three
  * trailing labels (`google.co.uk`, not `co.uk`).
  *
- * **Optional HTML `<link>` discovery** (settings toggle, manual favicon picker only):
- * fetches the bookmark URL (bounded read) and parses declared `rel=icon` / touch /
- * mask links. Does not run for automatic dial resolution unless scope is expanded later.
+ * **HTML `<link>` discovery** runs during automatic resolution (not only the picker):
+ * a bounded read of the bookmark's `<head>` parses declared icon links and follows
+ * their hrefs **even cross-origin**. A site's own declared icon is first-party (unlike
+ * domain-keyed favicon aggregators, which the `externalFaviconProviders` toggle gates),
+ * so this also runs in privacy mode.
  */
 import { get, set } from "idb-keyval";
 
@@ -37,7 +42,7 @@ export const FAVICON_MIN_QUALITY_PX = 48;
  * Bump when favicon candidate strategy changes so clients refetch sharper sources.
  * `e` / `i` suffix: external mirrors vs first-party-only cache entries.
  */
-const CACHE_PREFIX = "fsd-fav23-";
+const CACHE_PREFIX = "fsd-fav24-";
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 export type FaviconCandidateType =
@@ -53,6 +58,8 @@ export type FaviconCandidateType =
   | "duckduckgo"
   | "iconhorse"
   | "unavatar"
+  | "html"
+  | "html-svg"
   | "cache";
 
 export interface FaviconPick {
@@ -475,6 +482,12 @@ function typeRank(t: FaviconCandidateType): number {
     case "rootico":
       /* Same-origin /favicon.ico — often 32–48px but sometimes the best raster. */
       return 640;
+    case "html-svg":
+      /* Declared <link rel="icon"> SVG — vector and site-authoritative. */
+      return 655;
+    case "html":
+      /* Declared <link rel="icon"/"shortcut"/"alternate"/"fluid-icon"> raster. */
+      return 645;
     case "gstatic":
       /* Google faviconV2 */
       return 600;
@@ -552,6 +565,8 @@ function isFirstPartyType(t: FaviconCandidateType): boolean {
     t === "rootico" ||
     t === "apple" ||
     t === "apple-pre" ||
+    t === "html" ||
+    t === "html-svg" ||
     t === "cache"
   );
 }
@@ -605,7 +620,9 @@ export function pickBestFavicon(results: FaviconPick[]): FaviconPick | null {
   const bestApple = bestOfGroup(apples);
   if (bestApple && bestApple.width > 0) return bestApple;
 
-  const rootSvgs = pool.filter((r) => r.type === "rootsvg");
+  const rootSvgs = pool.filter(
+    (r) => r.type === "rootsvg" || r.type === "html-svg",
+  );
   const bestRootSvg = bestOfGroup(rootSvgs);
   if (bestRootSvg && bestRootSvg.width > 0) return bestRootSvg;
 
@@ -1016,23 +1033,43 @@ function isHttpOrHttpsUrl(u: URL): boolean {
 
 const PICKER_HTML_FETCH_TIMEOUT_MS = 12_000;
 const PICKER_HTML_MAX_READ_BYTES = 384 * 1024;
-const HTML_APPLE_TOUCH_MAX = 8;
+const HTML_ICON_MAX = 12;
 
-function relTokensIncludeAppleTouchOnly(rel: string): boolean {
-  return rel
-    .toLowerCase()
-    .split(/\s+/)
-    .some(
-      (t) =>
-        t === "apple-touch-icon" || t === "apple-touch-icon-precomposed",
-    );
+/**
+ * Classify a `<link>`'s `rel` / `type` / `href` into a favicon candidate type, or
+ * `null` to skip. Covers apple-touch, the standard `rel="icon"` family (including
+ * `shortcut icon` / `alternate icon`), and GitHub-style `fluid-icon`. `mask-icon`
+ * (a monochrome silhouette) is intentionally skipped — it makes a poor colour tile.
+ */
+function declaredIconTypeFromLinkRel(
+  rel: string,
+  href: string,
+  typeAttr: string | null,
+): FaviconCandidateType | null {
+  const tokens = rel.toLowerCase().split(/\s+/).filter(Boolean);
+  if (tokens.includes("apple-touch-icon-precomposed")) return "apple-pre";
+  if (tokens.includes("apple-touch-icon")) return "apple";
+  /*
+   * Standard HTML icon links: an exact "icon" token (covers "icon", "shortcut icon",
+   * "icon shortcut", "alternate icon") plus GitHub's "fluid-icon". "mask-icon" is a
+   * single token (not "icon"), so it is naturally excluded here.
+   */
+  if (!tokens.includes("icon") && !tokens.includes("fluid-icon")) return null;
+  const lowerHref = href.trim().toLowerCase();
+  const isSvg =
+    (typeAttr?.toLowerCase().includes("svg") ?? false) ||
+    /\.svg(?:[?#]|$)/.test(lowerHref);
+  return isSvg ? "html-svg" : "html";
 }
 
 /**
- * Apple-touch `<link rel="apple-touch-icon…" href>` only (many sites host these on a
- * CDN; same-origin `/apple-touch-icon.png` probes miss them).
+ * Declared icon `<link>` hrefs parsed from page HTML: apple-touch, the standard
+ * `rel="icon"` family, and `fluid-icon`. Many sites (Google, GitHub, Reddit, …) host
+ * these on a CDN, so hrefs are resolved against the document URL (handles
+ * protocol-relative `//cdn/…`) and kept even when cross-origin. Widths are 0 here; the
+ * real decoded size is measured when each candidate is probed.
  */
-export function appleTouchHtmlPicksFromLinkTags(
+export function htmlDeclaredIconPicksFromLinkTags(
   html: string,
   documentUrl: string,
 ): FaviconPick[] {
@@ -1052,7 +1089,13 @@ export function appleTouchHtmlPicksFromLinkTags(
     const hrefRaw = matchHtmlAttribute(frag, "href");
     if (!hrefRaw) continue;
     const rel = matchHtmlAttribute(frag, "rel");
-    if (!rel || !relTokensIncludeAppleTouchOnly(rel)) continue;
+    if (!rel) continue;
+    const type = declaredIconTypeFromLinkRel(
+      rel,
+      hrefRaw,
+      matchHtmlAttribute(frag, "type"),
+    );
+    if (!type) continue;
     let resolved: URL;
     try {
       resolved = new URL(hrefRaw, base);
@@ -1060,25 +1103,20 @@ export function appleTouchHtmlPicksFromLinkTags(
       continue;
     }
     if (!isHttpOrHttpsUrl(resolved)) continue;
-    const isPre = rel.toLowerCase().includes("precomposed");
-    out.push({
-      url: resolved.href,
-      width: 0,
-      type: isPre ? "apple-pre" : "apple",
-    });
-    if (out.length >= HTML_APPLE_TOUCH_MAX) break;
+    out.push({ url: resolved.href, width: 0, type });
+    if (out.length >= HTML_ICON_MAX) break;
   }
   return dedupeFaviconPicksByUrl(out);
 }
 
-async function gatherHtmlAppleTouchFaviconPicks(
+async function gatherHtmlDeclaredIconPicks(
   pageUrl: string,
   alive: () => boolean,
 ): Promise<FaviconPick[]> {
   if (!alive()) return [];
   const got = await fetchHtmlHeadSnippetForPicker(pageUrl);
   if (!alive() || !got) return [];
-  return appleTouchHtmlPicksFromLinkTags(got.html, got.finalUrl);
+  return htmlDeclaredIconPicksFromLinkTags(got.html, got.finalUrl);
 }
 
 async function fetchHtmlHeadSnippetForPicker(
@@ -1432,9 +1470,16 @@ async function probePageForFavicon(
     return bestA;
   }
 
+  let htmlDeclaredResults: FaviconPick[] = [];
   if (!sameOriginApple || sameOriginApple.width < APPLE_TOUCH_TRUST_WIDTH_PX) {
     const bestAType = bestA?.type;
-    const shouldTryHtmlApple =
+    /*
+     * Read declared <link> icons from the page <head>. Also run when stage A found
+     * nothing (bestA == null): that is the first-party case for sites like Google whose
+     * only icon is a declared cross-origin rel="icon" (no same-origin asset or manifest).
+     */
+    const shouldTryHtml =
+      bestA == null ||
       sameOriginApple != null ||
       bestAType === "native" ||
       bestAType === "native-lg" ||
@@ -1443,25 +1488,39 @@ async function probePageForFavicon(
       bestAType === "google" ||
       bestAType === "gstatic" ||
       bestAType === "duckduckgo";
-    if (shouldTryHtmlApple) {
-      const htmlAppleCandidates = await gatherHtmlAppleTouchFaviconPicks(pageUrl, alive);
-      if (alive() && htmlAppleCandidates.length > 0) {
-        const htmlAppleResults = await probeQueueWithSlots(
-          htmlAppleCandidates,
-          alive,
-          {},
-        );
-        combinedAppleResults = [...combinedAppleResults, ...htmlAppleResults];
-        const bestAfterHtmlApple = pickBestFavicon([
-          ...combinedAppleResults,
-          ...resultsA,
-        ]);
-        if (
-          bestAfterHtmlApple &&
-          (bestAfterHtmlApple.type === "apple" ||
-            bestAfterHtmlApple.type === "apple-pre")
-        ) {
-          return bestAfterHtmlApple;
+    if (shouldTryHtml) {
+      const htmlCandidates = await gatherHtmlDeclaredIconPicks(pageUrl, alive);
+      if (alive() && htmlCandidates.length > 0) {
+        const htmlResults = await probeQueueWithSlots(htmlCandidates, alive, {});
+        if (alive()) {
+          combinedAppleResults = [
+            ...combinedAppleResults,
+            ...htmlResults.filter(
+              (r) => r.type === "apple" || r.type === "apple-pre",
+            ),
+          ];
+          htmlDeclaredResults = htmlResults.filter(
+            (r) => r.type !== "apple" && r.type !== "apple-pre",
+          );
+          const bestAfterHtml = pickBestFavicon([
+            ...combinedAppleResults,
+            ...resultsA,
+            ...htmlDeclaredResults,
+          ]);
+          /*
+           * Touch icons and declared SVGs are authoritative/vector — return now so a
+           * third-party mirror can't override a crisp first-party icon. Declared raster
+           * icons (`html`) fall through to the size gate below instead, so a tiny
+           * declared favicon won't beat a large mirror when providers are enabled.
+           */
+          if (
+            bestAfterHtml &&
+            (bestAfterHtml.type === "apple" ||
+              bestAfterHtml.type === "apple-pre" ||
+              bestAfterHtml.type === "html-svg")
+          ) {
+            return bestAfterHtml;
+          }
         }
       }
     }
@@ -1470,6 +1529,7 @@ async function probePageForFavicon(
   const bestAfterAppleFallback = pickBestFavicon([
     ...combinedAppleResults,
     ...resultsA,
+    ...htmlDeclaredResults,
   ]);
   if (bestAfterAppleFallback && bestAfterAppleFallback.width >= FAVICON_MIN_QUALITY_PX) {
     return bestAfterAppleFallback;
@@ -1477,7 +1537,12 @@ async function probePageForFavicon(
 
   const resultsB = await probeQueueWithSlots(stageB, alive, {});
   if (!alive()) return null;
-  return pickBestFavicon([...combinedAppleResults, ...resultsA, ...resultsB]);
+  return pickBestFavicon([
+    ...combinedAppleResults,
+    ...resultsA,
+    ...htmlDeclaredResults,
+    ...resultsB,
+  ]);
 }
 
 export type ResolveFaviconForBookmarkOptions = {

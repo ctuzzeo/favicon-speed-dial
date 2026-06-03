@@ -13,7 +13,7 @@ import {
   getChromeFastHqFaviconUrl,
   getFaviconPickerCandidates,
   getPlaceholderFaviconUrl,
-  appleTouchHtmlPicksFromLinkTags,
+  htmlDeclaredIconPicksFromLinkTags,
   inferLargestSizeFromManifestSizes,
   isDiscouragedDdgPngIconUrl,
   manifestIconSortWidth,
@@ -157,6 +157,39 @@ describe("pickBestFavicon", () => {
     ).toBe("a");
   });
 
+  it("treats a declared html-svg like rootsvg (wins over wider native/CDN)", () => {
+    const a: FaviconPick[] = [
+      { url: "n", width: 256, type: "native-lg" },
+      { url: "g", width: 128, type: "google" },
+      { url: "s", width: 32, type: "html-svg" },
+    ];
+    expect(pickBestFavicon(a)?.url).toBe("s");
+  });
+
+  it("declared html raster competes by decoded width (beats small native)", () => {
+    const a: FaviconPick[] = [
+      { url: "h", width: 64, type: "html" },
+      { url: "n", width: 32, type: "native" },
+    ];
+    expect(pickBestFavicon(a)?.url).toBe("h");
+  });
+
+  it("declared html raster does not beat a larger manifest", () => {
+    const a: FaviconPick[] = [
+      { url: "m", width: 512, type: "manifest" },
+      { url: "h", width: 64, type: "html" },
+    ];
+    expect(pickBestFavicon(a)?.url).toBe("m");
+  });
+
+  it("prefers declared html over same-origin rootico on a width tie", () => {
+    const a: FaviconPick[] = [
+      { url: "i", width: 32, type: "rootico" },
+      { url: "h", width: 32, type: "html" },
+    ];
+    expect(pickBestFavicon(a)?.url).toBe("h");
+  });
+
   it("exports quality threshold", () => {
     expect(FAVICON_MIN_QUALITY_PX).toBe(48);
   });
@@ -259,29 +292,80 @@ describe("resolveUrlAfterRedirects", () => {
   });
 });
 
-describe("appleTouchHtmlPicksFromLinkTags", () => {
+describe("htmlDeclaredIconPicksFromLinkTags", () => {
   it("extracts apple-touch-icon hrefs for probing", () => {
     const html =
       '<head><link rel="apple-touch-icon" sizes="180x180" href="https://cdn.example/a.png"></head>';
-    expect(appleTouchHtmlPicksFromLinkTags(html, "https://www.example.com/page")).toEqual(
-      [{ url: "https://cdn.example/a.png", width: 0, type: "apple" }],
-    );
+    expect(
+      htmlDeclaredIconPicksFromLinkTags(html, "https://www.example.com/page"),
+    ).toEqual([{ url: "https://cdn.example/a.png", width: 0, type: "apple" }]);
   });
 
   it("maps precomposed rel to apple-pre", () => {
-    const html =
-      '<link rel="apple-touch-icon-precomposed" href="/touch.png">';
-    expect(appleTouchHtmlPicksFromLinkTags(html, "https://z.example/")).toEqual([
+    const html = '<link rel="apple-touch-icon-precomposed" href="/touch.png">';
+    expect(htmlDeclaredIconPicksFromLinkTags(html, "https://z.example/")).toEqual([
       { url: "https://z.example/touch.png", width: 0, type: "apple-pre" },
     ]);
   });
 
-  it("ignores generic rel=icon", () => {
-    const html =
-      '<link rel="icon" href="/f.ico"><link rel="apple-touch-icon" href="/a.png">';
-    expect(appleTouchHtmlPicksFromLinkTags(html, "https://z.example/")).toEqual([
-      { url: "https://z.example/a.png", width: 0, type: "apple" },
+  it("parses standard rel=icon as an html candidate (previously ignored)", () => {
+    const html = '<link rel="icon" href="/f.ico">';
+    expect(htmlDeclaredIconPicksFromLinkTags(html, "https://z.example/")).toEqual([
+      { url: "https://z.example/f.ico", width: 0, type: "html" },
     ]);
+  });
+
+  it("resolves Google-style protocol-relative cross-origin rel=icon", () => {
+    const html =
+      '<link href="//www.gstatic.com/images/branding/searchlogo/ico/favicon.ico" rel="icon">';
+    expect(
+      htmlDeclaredIconPicksFromLinkTags(html, "https://www.google.com/"),
+    ).toEqual([
+      {
+        url: "https://www.gstatic.com/images/branding/searchlogo/ico/favicon.ico",
+        width: 0,
+        type: "html",
+      },
+    ]);
+  });
+
+  it("treats rel=icon SVG (by type or extension) as html-svg", () => {
+    const html =
+      '<link rel="icon" type="image/svg+xml" href="https://cdn.example/icon.svg">';
+    expect(
+      htmlDeclaredIconPicksFromLinkTags(html, "https://github.com/"),
+    ).toEqual([{ url: "https://cdn.example/icon.svg", width: 0, type: "html-svg" }]);
+  });
+
+  it("parses shortcut/alternate icon and reddit-style 'icon shortcut'", () => {
+    const html =
+      '<link rel="shortcut icon" href="/a.png">' +
+      '<link rel="alternate icon" href="https://cdn.example/b.png">' +
+      '<link rel="icon shortcut" sizes="64x64" href="https://www.redditstatic.com/64.png">';
+    const out = htmlDeclaredIconPicksFromLinkTags(html, "https://z.example/");
+    expect(out.map((o) => o.url)).toEqual([
+      "https://z.example/a.png",
+      "https://cdn.example/b.png",
+      "https://www.redditstatic.com/64.png",
+    ]);
+    expect(out.every((o) => o.type === "html")).toBe(true);
+  });
+
+  it("parses fluid-icon but skips monochrome mask-icon", () => {
+    const html =
+      '<link rel="fluid-icon" href="https://github.com/fluidicon.png">' +
+      '<link rel="mask-icon" href="https://cdn.example/pinned.svg" color="#000">';
+    expect(
+      htmlDeclaredIconPicksFromLinkTags(html, "https://github.com/"),
+    ).toEqual([
+      { url: "https://github.com/fluidicon.png", width: 0, type: "html" },
+    ]);
+  });
+
+  it("ignores links without an icon rel", () => {
+    const html =
+      '<link rel="stylesheet" href="/a.css"><link rel="preconnect" href="https://cdn.example">';
+    expect(htmlDeclaredIconPicksFromLinkTags(html, "https://z.example/")).toEqual([]);
   });
 });
 
