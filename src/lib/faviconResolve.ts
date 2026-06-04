@@ -1251,6 +1251,19 @@ export type FaviconPickerLoadOptions = {
   externalFaviconProviders?: boolean;
 };
 
+/** Human label for an icon discovered from a page's <link> tags. */
+function declaredPickerName(type: FaviconCandidateType): string {
+  switch (type) {
+    case "apple":
+    case "apple-pre":
+      return "Apple touch (declared)";
+    case "html-svg":
+      return "Declared icon (SVG)";
+    default:
+      return "Declared icon";
+  }
+}
+
 export async function getFaviconPickerCandidates(
   fullUrl: string,
   options?: FaviconPickerLoadOptions,
@@ -1276,8 +1289,20 @@ export async function getFaviconPickerCandidates(
   }
 
   const fromEffective = buildPickerOptionsForPage(parsedEff, effectiveUrl, external);
+
+  // Also surface icons the page declares via <link> (apple-touch, rel=icon, shortcut,
+  // fluid-icon), often on a non-standard path or CDN the fixed guesses above miss.
+  // Declared icons are first-party, so they appear in privacy mode too; the modal hides
+  // any candidate whose <img> fails to load.
+  const declaredOptions = (
+    await gatherHtmlDeclaredIconPicks(effectiveUrl, () => true)
+  ).map((pick) => ({ name: declaredPickerName(pick.type), url: pick.url }));
+
   return dedupePickerMergeHttpDuplicates(
-    mergePickerOptionsPreferFirst(fromBookmark, fromEffective),
+    mergePickerOptionsPreferFirst(
+      mergePickerOptionsPreferFirst(fromBookmark, fromEffective),
+      declaredOptions,
+    ),
   );
 }
 

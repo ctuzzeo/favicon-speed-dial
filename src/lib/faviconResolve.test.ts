@@ -440,6 +440,59 @@ describe("getFaviconPickerCandidates", () => {
     expect(urls.some((u) => u.endsWith("/favicon.svg"))).toBe(true);
   });
 
+  it("includes icons declared in page HTML even with external providers off", async () => {
+    const html =
+      "<head>" +
+      '<link rel="apple-touch-icon" sizes="180x180" href="/img/brand/touch-180.png">' +
+      '<link rel="icon" type="image/svg+xml" href="https://cdn.example.net/icon.svg">' +
+      "</head>";
+    const makeHtmlResponse = (u: string) =>
+      ({
+        ok: true,
+        status: 200,
+        url: u,
+        headers: new Headers({ "content-type": "text/html" }),
+        body: {
+          getReader() {
+            let sent = false;
+            return {
+              read: async () =>
+                sent
+                  ? { done: true, value: undefined }
+                  : ((sent = true),
+                    {
+                      done: false,
+                      value: new TextEncoder().encode(html),
+                    }),
+              cancel: async () => {},
+            };
+          },
+        },
+      }) as unknown as Response;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const u =
+          typeof input === "string"
+            ? input
+            : input instanceof URL
+              ? input.href
+              : String(input);
+        return makeHtmlResponse(u);
+      }),
+    );
+
+    const list = await getFaviconPickerCandidates(
+      "https://declared-icons.example/page",
+      { externalFaviconProviders: false },
+    );
+    const urls = list.map((o) => o.url);
+    expect(urls).toContain(
+      "https://declared-icons.example/img/brand/touch-180.png",
+    );
+    expect(urls).toContain("https://cdn.example.net/icon.svg");
+  });
+
   it("includes registrable apex mirrors for subdomains (PlayStation-style)", async () => {
     const list = await getFaviconPickerCandidates(
       "https://library.playstation.com/wishlist",
