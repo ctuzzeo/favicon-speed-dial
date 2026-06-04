@@ -815,7 +815,11 @@ if (browser.storage.onChanged) {
           const settingKey =
             syncedStorageKeyToSettingKey[storageKey] ??
             storageKey.replace(/-([a-z])/g, (g) => g[1].toUpperCase());
-          if (settingKey in settings) {
+          // Skip removals (newValue === undefined): a deleted key must not clobber a
+          // settings object with undefined. Dropping the legacy manual-favicons blob
+          // during migration would otherwise set manualFavicons = undefined and crash
+          // the dial's `settings.manualFavicons[host]` lookups.
+          if (settingKey in settings && newValue !== undefined) {
             set(
               settings,
               settingKey as keyof typeof settings,

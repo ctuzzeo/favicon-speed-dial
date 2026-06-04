@@ -54,7 +54,8 @@ export const Dial = observer(function Dial(props: DialProps) {
   const siteHost =
     props.type === "bookmark" && props.url ? hostnameForSiteKey(props.url) : "";
   const backgroundImage =
-    (siteHost && settings.siteImages[siteHost]) || settings.dialImages[props.id];
+    (siteHost && settings.siteImages?.[siteHost]) ||
+    settings.dialImages?.[props.id];
 
   const nameFallback = (
     <div>
@@ -136,7 +137,7 @@ const Favicon = observer(function Favicon({
   const parsed = url ? parseBookmarkUrl(url) : null;
   const hostname = parsed?.hostname ?? "";
   const manualFaviconOverride = hostname
-    ? settings.manualFavicons[hostname]
+    ? settings.manualFavicons?.[hostname]
     : undefined;
   const externalFav = settings.enableExternalFaviconProviders;
 
@@ -159,7 +160,7 @@ const Favicon = observer(function Favicon({
     }
 
     const host = parsedUrl.hostname;
-    const manual = settings.manualFavicons[host];
+    const manual = settings.manualFavicons?.[host];
     if (manual && !isDiscouragedDdgPngIconUrl(manual)) {
       probeGen.current += 1;
       const myGen = probeGen.current;
