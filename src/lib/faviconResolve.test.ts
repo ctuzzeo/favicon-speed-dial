@@ -298,7 +298,7 @@ describe("htmlDeclaredIconPicksFromLinkTags", () => {
       '<head><link rel="apple-touch-icon" sizes="180x180" href="https://cdn.example/a.png"></head>';
     expect(
       htmlDeclaredIconPicksFromLinkTags(html, "https://www.example.com/page"),
-    ).toEqual([{ url: "https://cdn.example/a.png", width: 0, type: "apple" }]);
+    ).toEqual([{ url: "https://cdn.example/a.png", width: 180, type: "apple" }]);
   });
 
   it("maps precomposed rel to apple-pre", () => {
@@ -343,11 +343,13 @@ describe("htmlDeclaredIconPicksFromLinkTags", () => {
       '<link rel="alternate icon" href="https://cdn.example/b.png">' +
       '<link rel="icon shortcut" sizes="64x64" href="https://www.redditstatic.com/64.png">';
     const out = htmlDeclaredIconPicksFromLinkTags(html, "https://z.example/");
-    expect(out.map((o) => o.url)).toEqual([
-      "https://z.example/a.png",
-      "https://cdn.example/b.png",
-      "https://www.redditstatic.com/64.png",
-    ]);
+    expect([...out.map((o) => o.url)].sort()).toEqual(
+      [
+        "https://cdn.example/b.png",
+        "https://www.redditstatic.com/64.png",
+        "https://z.example/a.png",
+      ].sort(),
+    );
     expect(out.every((o) => o.type === "html")).toBe(true);
   });
 
@@ -366,6 +368,35 @@ describe("htmlDeclaredIconPicksFromLinkTags", () => {
     const html =
       '<link rel="stylesheet" href="/a.css"><link rel="preconnect" href="https://cdn.example">';
     expect(htmlDeclaredIconPicksFromLinkTags(html, "https://z.example/")).toEqual([]);
+  });
+
+  it("resolves relative icon hrefs against a <base href> (iCloud-style)", () => {
+    const html =
+      '<head><base href="/system/build/en-us/">' +
+      '<link rel="apple-touch-icon" href="../favicons/touch-180.png"></head>';
+    expect(
+      htmlDeclaredIconPicksFromLinkTags(html, "https://www.icloud.com/"),
+    ).toEqual([
+      {
+        url: "https://www.icloud.com/system/build/favicons/touch-180.png",
+        width: 0,
+        type: "apple",
+      },
+    ]);
+  });
+
+  it("keeps the largest declared sizes and caps the list", () => {
+    const html = Array.from({ length: 15 }, (_, i) => {
+      const n = (i + 1) * 16;
+      return `<link rel="icon" sizes="${n}x${n}" href="/i-${n}.png">`;
+    }).join("");
+    const out = htmlDeclaredIconPicksFromLinkTags(html, "https://z.example/");
+    expect(out.length).toBe(12);
+    expect(out[0]).toEqual({
+      url: "https://z.example/i-240.png",
+      width: 240,
+      type: "html",
+    });
   });
 });
 

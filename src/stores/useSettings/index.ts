@@ -93,7 +93,7 @@ const defaultSettings = {
   titleOpacity: 0.75,
   titleSize: 13,
   themeOption: "System Theme",
-  wallpaper: prefersDarkMode() ? "dark-wallpaper" : "light-wallpaper",
+  wallpaper: "DesertDay",
   bingWallpaperUrl: "",
   bingDebugInfo: "",
   /** Restore the last-opened folder on new tab (localStorage); URL hash still wins when set. */

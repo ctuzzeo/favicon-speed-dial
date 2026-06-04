@@ -1034,6 +1034,8 @@ function isHttpOrHttpsUrl(u: URL): boolean {
 const PICKER_HTML_FETCH_TIMEOUT_MS = 12_000;
 const PICKER_HTML_MAX_READ_BYTES = 384 * 1024;
 const HTML_ICON_MAX = 12;
+/** Safety bound on how many <link> tags we scan before sorting/capping. */
+const HTML_LINK_SCAN_MAX = 64;
 
 /**
  * Classify a `<link>`'s `rel` / `type` / `href` into a favicon candidate type, or
@@ -1073,13 +1075,30 @@ export function htmlDeclaredIconPicksFromLinkTags(
   html: string,
   documentUrl: string,
 ): FaviconPick[] {
-  let base: URL;
+  let docBase: URL;
   try {
-    base = new URL(documentUrl);
+    docBase = new URL(documentUrl);
   } catch {
     return [];
   }
-  if (!isHttpOrHttpsUrl(base)) return [];
+  if (!isHttpOrHttpsUrl(docBase)) return [];
+
+  // Honor <base href> when resolving relative icon hrefs. Sites like iCloud declare
+  // `<base href="/system/.../en-us/">` with `<link href="../favicons/...">`, which
+  // resolve against the base, not the document URL.
+  let base = docBase;
+  const baseTag = /<base\b([^>]*)>/i.exec(html);
+  if (baseTag) {
+    const baseHref = matchHtmlAttribute(baseTag[1] ?? "", "href");
+    if (baseHref) {
+      try {
+        const resolvedBase = new URL(baseHref, docBase);
+        if (isHttpOrHttpsUrl(resolvedBase)) base = resolvedBase;
+      } catch {
+        /* keep the document URL as base */
+      }
+    }
+  }
 
   const out: FaviconPick[] = [];
   const linkRe = /<link\b([^>]*?)>/gi;
@@ -1103,10 +1122,17 @@ export function htmlDeclaredIconPicksFromLinkTags(
       continue;
     }
     if (!isHttpOrHttpsUrl(resolved)) continue;
-    out.push({ url: resolved.href, width: 0, type });
-    if (out.length >= HTML_ICON_MAX) break;
+    const width = inferLargestSizeFromManifestSizes(
+      matchHtmlAttribute(frag, "sizes") ?? undefined,
+    );
+    out.push({ url: resolved.href, width, type });
+    if (out.length >= HTML_LINK_SCAN_MAX) break;
   }
-  return dedupeFaviconPicksByUrl(out);
+  // Prefer the largest declared sizes, then cap. Sites like BBC list one logo at ~18
+  // sizes; keep the big ones (stable sort preserves document order within equal sizes).
+  const deduped = dedupeFaviconPicksByUrl(out);
+  deduped.sort((a, b) => b.width - a.width);
+  return deduped.slice(0, HTML_ICON_MAX);
 }
 
 async function gatherHtmlDeclaredIconPicks(
@@ -1252,16 +1278,30 @@ export type FaviconPickerLoadOptions = {
 };
 
 /** Human label for an icon discovered from a page's <link> tags. */
-function declaredPickerName(type: FaviconCandidateType): string {
+function declaredPickerName(type: FaviconCandidateType, width: number): string {
+  const px = width > 0 ? ` ${width}px` : "";
   switch (type) {
     case "apple":
     case "apple-pre":
-      return "Apple touch (declared)";
+      return `Apple touch${px} (declared)`;
     case "html-svg":
       return "Declared icon (SVG)";
     default:
-      return "Declared icon";
+      return `Declared icon${px}`;
   }
+}
+
+/**
+ * Collapse declared picks for the picker: many sites (e.g. BBC) declare the same logo
+ * at a dozen sizes. Keep only the largest of each type so the list stays readable.
+ */
+function collapseDeclaredPicksForPicker(picks: FaviconPick[]): FaviconPick[] {
+  const bestByType = new Map<FaviconCandidateType, FaviconPick>();
+  for (const p of picks) {
+    const cur = bestByType.get(p.type);
+    if (!cur || p.width > cur.width) bestByType.set(p.type, p);
+  }
+  return [...bestByType.values()];
 }
 
 export async function getFaviconPickerCandidates(
@@ -1294,9 +1334,12 @@ export async function getFaviconPickerCandidates(
   // fluid-icon), often on a non-standard path or CDN the fixed guesses above miss.
   // Declared icons are first-party, so they appear in privacy mode too; the modal hides
   // any candidate whose <img> fails to load.
-  const declaredOptions = (
-    await gatherHtmlDeclaredIconPicks(effectiveUrl, () => true)
-  ).map((pick) => ({ name: declaredPickerName(pick.type), url: pick.url }));
+  const declaredOptions = collapseDeclaredPicksForPicker(
+    await gatherHtmlDeclaredIconPicks(effectiveUrl, () => true),
+  ).map((pick) => ({
+    name: declaredPickerName(pick.type, pick.width),
+    url: pick.url,
+  }));
 
   return dedupePickerMergeHttpDuplicates(
     mergePickerOptionsPreferFirst(
