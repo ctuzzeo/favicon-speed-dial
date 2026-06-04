@@ -524,6 +524,51 @@ describe("getFaviconPickerCandidates", () => {
     expect(urls).toContain("https://cdn.example.net/icon.svg");
   });
 
+  it("includes web-manifest icons (eBay-style PWA logo not in fixed guesses)", async () => {
+    const manifest = JSON.stringify({
+      icons: [
+        {
+          src: "https://cdn.example/app-192.png",
+          sizes: "192x192",
+          type: "image/png",
+        },
+        {
+          src: "https://cdn.example/app-512.png",
+          sizes: "512x512",
+          type: "image/png",
+        },
+      ],
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const u =
+          typeof input === "string"
+            ? input
+            : input instanceof URL
+              ? input.href
+              : String(input);
+        if (/manifest/i.test(u)) {
+          return {
+            ok: true,
+            status: 200,
+            url: u,
+            text: async () => manifest,
+          } as unknown as Response;
+        }
+        return { ok: true, status: 200, url: u, body: null } as Response;
+      }),
+    );
+
+    const list = await getFaviconPickerCandidates("https://pwa-site.example/", {
+      externalFaviconProviders: false,
+    });
+    const urls = list.map((o) => o.url);
+    // Collapsed to the largest manifest icon, and present even with mirrors off.
+    expect(urls).toContain("https://cdn.example/app-512.png");
+    expect(urls).not.toContain("https://cdn.example/app-192.png");
+  });
+
   it("includes registrable apex mirrors for subdomains (PlayStation-style)", async () => {
     const list = await getFaviconPickerCandidates(
       "https://library.playstation.com/wishlist",

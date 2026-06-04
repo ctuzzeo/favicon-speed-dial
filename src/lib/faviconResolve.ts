@@ -1277,10 +1277,12 @@ export type FaviconPickerLoadOptions = {
   externalFaviconProviders?: boolean;
 };
 
-/** Human label for an icon discovered from a page's <link> tags. */
-function declaredPickerName(type: FaviconCandidateType, width: number): string {
+/** Human label for a manifest / declared <link> icon shown in the picker. */
+function pickerCandidateName(type: FaviconCandidateType, width: number): string {
   const px = width > 0 ? ` ${width}px` : "";
   switch (type) {
+    case "manifest":
+      return `Manifest icon${px}`;
     case "apple":
     case "apple-pre":
       return `Apple touch${px} (declared)`;
@@ -1292,10 +1294,11 @@ function declaredPickerName(type: FaviconCandidateType, width: number): string {
 }
 
 /**
- * Collapse declared picks for the picker: many sites (e.g. BBC) declare the same logo
- * at a dozen sizes. Keep only the largest of each type so the list stays readable.
+ * Collapse picks for the picker: sites declare the same logo at several sizes (web
+ * manifest entries, BBC's touch icons). Keep only the largest of each type so the list
+ * stays readable.
  */
-function collapseDeclaredPicksForPicker(picks: FaviconPick[]): FaviconPick[] {
+function collapsePicksByTypeKeepLargest(picks: FaviconPick[]): FaviconPick[] {
   const bestByType = new Map<FaviconCandidateType, FaviconPick>();
   for (const p of picks) {
     const cur = bestByType.get(p.type);
@@ -1330,21 +1333,27 @@ export async function getFaviconPickerCandidates(
 
   const fromEffective = buildPickerOptionsForPage(parsedEff, effectiveUrl, external);
 
-  // Also surface icons the page declares via <link> (apple-touch, rel=icon, shortcut,
-  // fluid-icon), often on a non-standard path or CDN the fixed guesses above miss.
-  // Declared icons are first-party, so they appear in privacy mode too; the modal hides
-  // any candidate whose <img> fails to load.
-  const declaredOptions = collapseDeclaredPicksForPicker(
-    await gatherHtmlDeclaredIconPicks(effectiveUrl, () => true),
-  ).map((pick) => ({
-    name: declaredPickerName(pick.type, pick.width),
+  // Surface the web-manifest and declared <link> icons the automatic resolver uses, so
+  // the picker matches the dial. Sites like eBay expose their logo only via a manifest
+  // PWA icon (on a CDN), which the fixed guesses + <link> scan above never find. Both
+  // are first-party, so they show in privacy mode too. Collapse to the largest of each
+  // type to avoid a wall of same-logo size variants; the modal hides any that 404.
+  const [manifestPicks, declaredPicks] = await Promise.all([
+    fetchManifestIconCandidates(parsedEff.origin, () => true),
+    gatherHtmlDeclaredIconPicks(effectiveUrl, () => true),
+  ]);
+  const extraOptions = collapsePicksByTypeKeepLargest([
+    ...manifestPicks,
+    ...declaredPicks,
+  ]).map((pick) => ({
+    name: pickerCandidateName(pick.type, pick.width),
     url: pick.url,
   }));
 
   return dedupePickerMergeHttpDuplicates(
     mergePickerOptionsPreferFirst(
       mergePickerOptionsPreferFirst(fromBookmark, fromEffective),
-      declaredOptions,
+      extraOptions,
     ),
   );
 }
