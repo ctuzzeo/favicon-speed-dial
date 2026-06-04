@@ -14,6 +14,13 @@ import {
   readStorageStringOrFallback,
   type StorageSnapshot,
 } from "#lib/storageReaders";
+import {
+  collectPerSiteEntries,
+  MANUAL_FAVICON_INFIX,
+  mergeLegacyAndPerSite,
+  parsePerSiteKey,
+  perSiteKey,
+} from "#lib/syncKeys";
 
 // ==================================================================
 // SETUP
@@ -148,10 +155,13 @@ export const settings = makeAutoObservable({
           `${apiVersion}-dial-images`,
           defaultSettings.dialImages,
         );
-        settings.manualFavicons = readStorageRecord<ManualFavicons>(
-          storage,
-          `${apiVersion}-manual-favicons`,
-          defaultSettings.manualFavicons,
+        settings.manualFavicons = mergeLegacyAndPerSite(
+          readStorageRecord<ManualFavicons>(
+            storage,
+            `${apiVersion}-manual-favicons`,
+            defaultSettings.manualFavicons,
+          ),
+          collectPerSiteEntries(storage, apiVersion, MANUAL_FAVICON_INFIX),
         );
         settings.dialSize = readStorageStringOrFallback(
           storage,
@@ -248,6 +258,42 @@ export const settings = makeAutoObservable({
         }
       }
 
+      // One-time migration: split the legacy single manual-favicons blob into
+      // per-site keys (each well under the sync quota), then drop the blob so a
+      // cleared favicon can't reappear from a stale blob entry.
+      const legacyManual = readStorageRecord<ManualFavicons>(
+        storage,
+        `${apiVersion}-manual-favicons`,
+        {},
+      );
+      if (Object.keys(legacyManual).length > 0) {
+        const existing = collectPerSiteEntries(
+          storage,
+          apiVersion,
+          MANUAL_FAVICON_INFIX,
+        );
+        const writes: Record<string, string> = {};
+        for (const [host, url] of Object.entries(legacyManual)) {
+          if (!(host in existing) && typeof url === "string") {
+            writes[perSiteKey(apiVersion, MANUAL_FAVICON_INFIX, host)] = url;
+          }
+        }
+        if (Object.keys(writes).length > 0) {
+          browser.storage.local.set(writes);
+          if (settings.enableSync && browser.storage.sync) {
+            browser.storage.sync
+              .set(writes)
+              .catch((err) =>
+                console.warn("Favicon migration sync failed:", err),
+              );
+          }
+        }
+        browser.storage.local.remove(`${apiVersion}-manual-favicons`);
+        browser.storage.sync
+          ?.remove(`${apiVersion}-manual-favicons`)
+          .catch(() => {});
+      }
+
       // Fetch Bing only when stale. Bing updates once/day and the cached URL is
       // already applied above, so skip the network call when today's image is
       // cached. An explicit click on "Bing Image" always refetches.
@@ -277,6 +323,25 @@ export const settings = makeAutoObservable({
       browser.storage.sync.set({ [storageKey]: value }).catch((err) => {
         console.warn("Sync failed (possibly quota exceeded):", err);
       });
+    }
+  },
+
+  /** Save one per-site entry (favicon URL / compressed image) under its own key. */
+  _savePerSite(infix: string, host: string, value: string) {
+    const key = perSiteKey(apiVersion, infix, host);
+    browser.storage.local.set({ [key]: value });
+    if (settings.enableSync && browser.storage.sync) {
+      browser.storage.sync.set({ [key]: value }).catch((err) => {
+        console.warn("Sync failed (possibly quota exceeded):", err);
+      });
+    }
+  },
+
+  _removePerSite(infix: string, host: string) {
+    const key = perSiteKey(apiVersion, infix, host);
+    browser.storage.local.remove(key);
+    if (browser.storage.sync) {
+      browser.storage.sync.remove(key).catch(() => {});
     }
   },
 
@@ -361,7 +426,7 @@ export const settings = makeAutoObservable({
     runInAction(() => {
       set(settings.manualFavicons, hostname, url);
     });
-    settings._saveSetting("manual-favicons", { ...settings.manualFavicons });
+    settings._savePerSite(MANUAL_FAVICON_INFIX, hostname, url);
     bc.postMessage({ manualFavicons: { ...settings.manualFavicons } });
   },
 
@@ -370,7 +435,7 @@ export const settings = makeAutoObservable({
       runInAction(() => {
         remove(settings.manualFavicons, hostname);
       });
-      settings._saveSetting("manual-favicons", { ...settings.manualFavicons });
+      settings._removePerSite(MANUAL_FAVICON_INFIX, hostname);
       bc.postMessage({ manualFavicons: { ...settings.manualFavicons } });
     }
   },
@@ -660,6 +725,20 @@ if (browser.storage.onChanged) {
     if (areaName === "sync" && settings.enableSync) {
       runInAction(() => {
         for (const [key, { newValue }] of Object.entries(changes)) {
+          // Per-site manual favicon keys (one hostname each).
+          const favHost = parsePerSiteKey(
+            apiVersion,
+            MANUAL_FAVICON_INFIX,
+            key,
+          );
+          if (favHost) {
+            if (typeof newValue === "string") {
+              set(settings.manualFavicons, favHost, newValue);
+            } else {
+              remove(settings.manualFavicons, favHost);
+            }
+            continue;
+          }
           const storageKey = key.replace(`${apiVersion}-`, "");
           const settingKey =
             syncedStorageKeyToSettingKey[storageKey] ??
