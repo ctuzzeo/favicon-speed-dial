@@ -75,6 +75,23 @@ export const FaviconModal = observer(function FaviconModal() {
 
   const hasValidCandidates = Object.values(loadedUrls).some((v) => v);
 
+  // Surface the favicon currently applied to this site even when its source isn't in
+  // the generated list (e.g. a mirror picked earlier, now that external providers are
+  // off) — otherwise the dial shows an icon the picker doesn't, which is confusing.
+  let currentHostname = "";
+  try {
+    if (bookmarkURL) currentHostname = new URL(bookmarkURL).hostname;
+  } catch {
+    /* invalid bookmark URL */
+  }
+  const currentManual = currentHostname
+    ? settings.manualFavicons[currentHostname]
+    : undefined;
+  const displayCandidates =
+    currentManual && !candidates.some((c) => c.url === currentManual)
+      ? [{ name: "Current selection", url: currentManual }, ...candidates]
+      : candidates;
+
   return (
     <Modal
       title="Select Favicon"
@@ -95,7 +112,7 @@ export const FaviconModal = observer(function FaviconModal() {
         ) : (
           <>
             <div className="favicon-grid">
-              {candidates.map((candidate) => (
+              {displayCandidates.map((candidate) => (
                 <button
                   key={`${candidate.name}-${candidate.url}`}
                   type="button"
