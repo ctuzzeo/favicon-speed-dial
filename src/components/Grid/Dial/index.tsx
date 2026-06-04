@@ -11,6 +11,7 @@ import {
   parseBookmarkUrl,
   resolveFaviconForBookmark,
 } from "#lib/faviconResolve";
+import { hostnameForSiteKey } from "#lib/syncKeys";
 import { contextMenu } from "#stores/useContextMenu";
 import { settings } from "#stores/useSettings";
 
@@ -49,7 +50,11 @@ export const Dial = observer(function Dial(props: DialProps) {
   const backgroundColor = settings.dialColors[props.id]
     ? settings.dialColors[props.id]
     : dialColors(props.name);
-  const backgroundImage = settings.dialImages[props.id];
+  // Bookmark images sync per-site (keyed by hostname); folders + legacy stay by id.
+  const siteHost =
+    props.type === "bookmark" && props.url ? hostnameForSiteKey(props.url) : "";
+  const backgroundImage =
+    (siteHost && settings.siteImages[siteHost]) || settings.dialImages[props.id];
 
   const nameFallback = (
     <div>
@@ -94,7 +99,7 @@ export const Dial = observer(function Dial(props: DialProps) {
             props.type !== "folder" ? "2px 1px 0 rgb(33,33,33,0.7)" : "none",
         }}
       >
-        {!settings.dialImages[props.id] &&
+        {!backgroundImage &&
           (props.type === "bookmark" ? (
             <Favicon
               url={props.url}

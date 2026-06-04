@@ -274,8 +274,8 @@ export const SettingsContent = observer(function SettingsContent() {
           </div>
           <div className="setting-description" id="sync-settings-description">
             Synchronize your settings across devices when signed into your
-            browser account. Custom images and thumbnails are too large to sync
-            and stay on this device.
+            browser account. Per-site custom icons sync; the full-screen
+            wallpaper image stays on this device.
           </div>
         </div>
         <div className="setting-option toggle">

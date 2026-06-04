@@ -6,6 +6,7 @@ import {
   assertBingCdnHttpsUrl,
   buildBingWallpaperUrlFromHpApiPath,
 } from "#lib/bingWallpaperUrl";
+import { compressImageToDataUrl } from "#lib/imageCompress";
 import {
   readStorageBoolean,
   readStorageNumber,
@@ -16,10 +17,12 @@ import {
 } from "#lib/storageReaders";
 import {
   collectPerSiteEntries,
+  hostnameForSiteKey,
   MANUAL_FAVICON_INFIX,
   mergeLegacyAndPerSite,
   parsePerSiteKey,
   perSiteKey,
+  SITE_IMAGE_INFIX,
 } from "#lib/syncKeys";
 
 // ==================================================================
@@ -88,6 +91,7 @@ const defaultSettings = {
   defaultFolder: "",
   dialColors: {} as DialColors,
   dialImages: {} as DialImages,
+  siteImages: {} as DialImages,
   manualFavicons: {} as ManualFavicons,
   dialSize: "small",
   dialTransparent: {} as Record<string, boolean>,
@@ -162,6 +166,11 @@ export const settings = makeAutoObservable({
             defaultSettings.manualFavicons,
           ),
           collectPerSiteEntries(storage, apiVersion, MANUAL_FAVICON_INFIX),
+        );
+        settings.siteImages = collectPerSiteEntries(
+          storage,
+          apiVersion,
+          SITE_IMAGE_INFIX,
         );
         settings.dialSize = readStorageStringOrFallback(
           storage,
@@ -410,15 +419,35 @@ export const settings = makeAutoObservable({
     bc.postMessage({ dialColors: { ...settings.dialColors } });
   },
 
-  handleClearThumbnail(id: string) {
+  async handleClearThumbnail(id: string) {
+    let bookmarkUrl: string | undefined;
+    try {
+      bookmarkUrl = (await browser.bookmarks.get(id))[0]?.url;
+    } catch {
+      /* folder, or already removed */
+    }
+    const host = bookmarkUrl ? hostnameForSiteKey(bookmarkUrl) : "";
+    let changed = false;
+    if (host && settings.siteImages[host]) {
+      runInAction(() => {
+        remove(settings.siteImages, host);
+      });
+      settings._removePerSite(SITE_IMAGE_INFIX, host);
+      changed = true;
+    }
     if (settings.dialImages[id]) {
       runInAction(() => {
         delete settings.dialImages[id];
       });
-      // dial thumbnails are base64 and exceed the storage.sync per-item
-      // quota, so keep them local-only (sync=false).
+      // Folder thumbnails / legacy entries stay local-only (base64 > sync quota).
       settings._saveSetting("dial-images", { ...settings.dialImages }, false);
-      bc.postMessage({ dialImages: { ...settings.dialImages } });
+      changed = true;
+    }
+    if (changed) {
+      bc.postMessage({
+        siteImages: { ...settings.siteImages },
+        dialImages: { ...settings.dialImages },
+      });
     }
   },
 
@@ -441,29 +470,62 @@ export const settings = makeAutoObservable({
   },
 
   async handleSelectThumbnail(id: string) {
+    // Bookmarks key the image by hostname (compressed, synced per-site); folders have
+    // no hostname / stable id, so their thumbnails stay device-local by id.
+    let bookmarkUrl: string | undefined;
+    try {
+      bookmarkUrl = (await browser.bookmarks.get(id))[0]?.url;
+    } catch {
+      /* id is a folder or already gone */
+    }
+    const host = bookmarkUrl ? hostnameForSiteKey(bookmarkUrl) : "";
+
     const input = document.createElement("input");
     input.type = "file";
     input.accept = "image/*";
     input.onchange = async (e: Event) => {
       const file = (e.target as HTMLInputElement).files?.[0];
-      if (file) {
-        const reader = new FileReader();
-        reader.onload = async () => {
-          const base64 = reader.result as string;
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const base64 = reader.result as string;
+        if (host) {
+          try {
+            const compressed = await compressImageToDataUrl(base64, {
+              maxDim: 192,
+              maxLen: 7000,
+            });
+            runInAction(() => {
+              set(settings.siteImages, host, compressed);
+              // A per-site image supersedes any legacy by-id thumbnail.
+              if (settings.dialImages[id]) delete settings.dialImages[id];
+            });
+            settings._savePerSite(SITE_IMAGE_INFIX, host, compressed);
+            settings._saveSetting(
+              "dial-images",
+              { ...settings.dialImages },
+              false,
+            );
+            bc.postMessage({
+              siteImages: { ...settings.siteImages },
+              dialImages: { ...settings.dialImages },
+            });
+          } catch (err) {
+            console.error("Failed to compress thumbnail", err);
+          }
+        } else {
           runInAction(() => {
             set(settings.dialImages, id, base64);
           });
-          // dial thumbnails are base64 and exceed the storage.sync per-item
-          // quota, so keep them local-only (sync=false).
           settings._saveSetting(
             "dial-images",
             { ...settings.dialImages },
             false,
           );
           bc.postMessage({ dialImages: { ...settings.dialImages } });
-        };
-        reader.readAsDataURL(file);
-      }
+        }
+      };
+      reader.readAsDataURL(file);
     };
     input.click();
   },
@@ -736,6 +798,16 @@ if (browser.storage.onChanged) {
               set(settings.manualFavicons, favHost, newValue);
             } else {
               remove(settings.manualFavicons, favHost);
+            }
+            continue;
+          }
+          // Per-site image keys (one hostname each).
+          const imgHost = parsePerSiteKey(apiVersion, SITE_IMAGE_INFIX, key);
+          if (imgHost) {
+            if (typeof newValue === "string") {
+              set(settings.siteImages, imgHost, newValue);
+            } else {
+              remove(settings.siteImages, imgHost);
             }
             continue;
           }

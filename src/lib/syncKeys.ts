@@ -49,3 +49,15 @@ export function mergeLegacyAndPerSite(
 ): Record<string, string> {
   return { ...legacy, ...perSite };
 }
+
+/**
+ * Hostname used as the per-site key for a bookmark URL. Matches how `manualFavicons`
+ * is keyed (FaviconModal's `new URL(url).hostname`), so favicons and images agree.
+ */
+export function hostnameForSiteKey(url: string): string {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return "";
+  }
+}
