@@ -50,7 +50,7 @@ async function runPool(slice: PrefetchSlice, alive: () => boolean): Promise<void
       const idx = slice.next++;
       if (idx >= urls.length) break;
       await resolveFaviconForBookmark(urls[idx], alive, {
-        externalFaviconProviders: settings.enableExternalFaviconProviders,
+        externalFaviconProviders: settings.externalAllowedForUrl(urls[idx]),
       });
     }
   }

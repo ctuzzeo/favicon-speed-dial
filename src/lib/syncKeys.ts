@@ -9,6 +9,7 @@
 
 export const MANUAL_FAVICON_INFIX = "manual-favicon:";
 export const SITE_IMAGE_INFIX = "site-image:";
+export const EXTERNAL_HOST_INFIX = "external-host:";
 
 export function perSiteKey(
   apiVersion: string,

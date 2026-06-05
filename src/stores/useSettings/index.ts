@@ -25,6 +25,7 @@ import {
 } from "#lib/storageReaders";
 import {
   collectPerSiteEntries,
+  EXTERNAL_HOST_INFIX,
   hostnameForSiteKey,
   MANUAL_FAVICON_INFIX,
   mergeLegacyAndPerSite,
@@ -82,9 +83,7 @@ type BingWallpaperMessageResponse =
 const syncedStorageKeyToSettingKey: Record<
   string,
   keyof typeof defaultSettings
-> = {
-  "external-favicon-providers": "enableExternalFaviconProviders",
-};
+> = {};
 
 // ==================================================================
 // SETTINGS STORE
@@ -120,10 +119,10 @@ const defaultSettings = {
   /** Restore the last-opened folder on new tab (localStorage); URL hash still wins when set. */
   rememberLastFolder: true,
   /**
-   * When true, third-party favicon services may be used (they learn bookmark hostnames).
-   * When false, only same-origin assets, web manifests, and Chrome’s built-in `/_favicon/`.
+   * Hostnames the user opted into third-party favicon providers for (Google, etc.).
+   * Present ⇒ allowed; absent ⇒ first-party only. Synced per-site like manualFavicons.
    */
-  enableExternalFaviconProviders: true,
+  externalProviderHosts: {} as Record<string, string>,
 };
 
 export const settings = makeAutoObservable({
@@ -250,10 +249,10 @@ export const settings = makeAutoObservable({
           `${apiVersion}-remember-last-folder`,
           defaultSettings.rememberLastFolder,
         );
-        settings.enableExternalFaviconProviders = readStorageBoolean(
+        settings.externalProviderHosts = collectPerSiteEntries(
           storage,
-          `${apiVersion}-external-favicon-providers`,
-          defaultSettings.enableExternalFaviconProviders,
+          apiVersion,
+          EXTERNAL_HOST_INFIX,
         );
         settings.dialTransparent = readStorageRecord<Record<string, boolean>>(
           storage,
@@ -715,10 +714,23 @@ export const settings = makeAutoObservable({
     bc.postMessage({ rememberLastFolder: value });
   },
 
-  handleExternalFaviconProviders(value: boolean) {
-    settings.enableExternalFaviconProviders = value;
-    settings._saveSetting("external-favicon-providers", value);
-    bc.postMessage({ enableExternalFaviconProviders: value });
+  externalAllowedForUrl(url: string | undefined): boolean {
+    if (!url) return false;
+    return Boolean(settings.externalProviderHosts[hostnameForSiteKey(url)]);
+  },
+
+  handleExternalForHost(hostname: string, allowed: boolean) {
+    if (!hostname) return;
+    if (allowed) {
+      runInAction(() => set(settings.externalProviderHosts, hostname, "1"));
+      settings._savePerSite(EXTERNAL_HOST_INFIX, hostname, "1");
+    } else {
+      runInAction(() => remove(settings.externalProviderHosts, hostname));
+      settings._removePerSite(EXTERNAL_HOST_INFIX, hostname);
+    }
+    bc.postMessage({
+      externalProviderHosts: { ...settings.externalProviderHosts },
+    });
   },
 
   handleDialTransparent(id: string, value: boolean) {
@@ -848,6 +860,16 @@ if (browser.storage.onChanged) {
               set(settings.siteImages, imgHost, newValue);
             } else {
               remove(settings.siteImages, imgHost);
+            }
+            continue;
+          }
+          // Per-site third-party-provider opt-in keys.
+          const extHost = parsePerSiteKey(apiVersion, EXTERNAL_HOST_INFIX, key);
+          if (extHost) {
+            if (typeof newValue === "string") {
+              set(settings.externalProviderHosts, extHost, newValue);
+            } else {
+              remove(settings.externalProviderHosts, extHost);
             }
             continue;
           }

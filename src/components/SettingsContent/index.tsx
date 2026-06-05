@@ -18,7 +18,6 @@ export const SettingsContent = observer(function SettingsContent() {
     handleDialSize,
     handleMaxColumns,
     handleNewTab,
-    handleExternalFaviconProviders,
     handleEnableSync,
     handleColumnGap,
     handleRowGap,
@@ -233,35 +232,6 @@ export const SettingsContent = observer(function SettingsContent() {
             onClick={() => handleNewTab(!settings.newTab)}
             className="switch-root"
             checked={settings.newTab as boolean}
-          >
-            <span className="switch-thumb" />
-          </Switch>
-        </div>
-      </div>
-      <div className="setting-wrapper setting-group">
-        <div className="setting-label">
-          <div className="setting-title" id="external-favicon-providers-title">
-            External favicon providers
-          </div>
-          <div
-            className="setting-description"
-            id="external-favicon-providers-description"
-          >
-            Use third-party hosts (e.g. Google) for sharper icons. Off:
-            first-party + Chrome favicon cache only.
-          </div>
-        </div>
-        <div className="setting-option toggle">
-          <Switch
-            aria-labelledby="external-favicon-providers-title"
-            aria-describedby="external-favicon-providers-description"
-            onClick={() =>
-              handleExternalFaviconProviders(
-                !settings.enableExternalFaviconProviders,
-              )
-            }
-            className="switch-root"
-            checked={settings.enableExternalFaviconProviders as boolean}
           >
             <span className="switch-thumb" />
           </Switch>

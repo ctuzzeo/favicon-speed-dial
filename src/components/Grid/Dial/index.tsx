@@ -139,7 +139,7 @@ const Favicon = observer(function Favicon({
   const manualFaviconOverride = hostname
     ? settings.manualFavicons?.[hostname]
     : undefined;
-  const externalFav = settings.enableExternalFaviconProviders;
+  const externalFav = settings.externalAllowedForUrl(url);
 
   const placeholderUrl = url ? getPlaceholderFaviconUrl(url, externalFav) : null;
 

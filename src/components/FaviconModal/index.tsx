@@ -18,6 +18,10 @@ export const FaviconModal = observer(function FaviconModal() {
   const [loadedUrls, setLoadedUrls] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
 
+  // Third-party providers are opt-in per site; this drives the toggle below and
+  // re-fetches candidates when it's flipped.
+  const externalOn = settings.externalAllowedForUrl(bookmarkURL);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -42,7 +46,9 @@ export const FaviconModal = observer(function FaviconModal() {
           setBookmarkURL(bookmark.url);
           setCandidates(
             await getFaviconPickerCandidates(bookmark.url, {
-              externalFaviconProviders: settings.enableExternalFaviconProviders,
+              externalFaviconProviders: settings.externalAllowedForUrl(
+                bookmark.url,
+              ),
             }),
           );
         } catch {
@@ -58,9 +64,8 @@ export const FaviconModal = observer(function FaviconModal() {
     return () => {
       cancelled = true;
     };
-    /* Re-fetch candidates when privacy toggle changes while modal context unchanged. */
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- MobX observable
-  }, [editingBookmarkId, settings.enableExternalFaviconProviders]);
+    /* Re-fetch candidates when the per-site provider toggle changes. */
+  }, [editingBookmarkId, externalOn]);
 
   function handleSelect(iconUrl: string) {
     if (!bookmarkURL) return;
@@ -106,6 +111,28 @@ export const FaviconModal = observer(function FaviconModal() {
           (missing rows usually mean that path is not hosted here, e.g. touch
           icons on a CDN).
         </p>
+
+        {bookmarkURL && (
+          <label
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              margin: "0 0 14px",
+              fontSize: "13px",
+              cursor: "pointer",
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={externalOn}
+              onChange={(e) =>
+                settings.handleExternalForHost(currentHostname, e.target.checked)
+              }
+            />
+            Use third-party providers (Google, etc.) for this site
+          </label>
+        )}
 
         {loading ? (
           <div className="loading">Searching for icons...</div>

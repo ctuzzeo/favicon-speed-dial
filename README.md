@@ -46,9 +46,12 @@ and here is exactly what it is for:
 - **`https://www.bing.com/*`** — only used when you choose the Bing daily
   wallpaper, to fetch that day's image URL.
 
-If you prefer to avoid third-party favicon services entirely, turn off
-**External favicon providers** in Settings; the extension then uses only
-first-party assets and Chrome's favicon cache.
+By default the extension uses only **first-party** icon sources (the site's own
+assets, its declared `<link>` icons and web manifest, plus Chrome's favicon
+cache) — no third-party favicon services are contacted. You can opt a specific
+site into third-party providers (Google, etc.) from its **Select favicon** menu
+(right-click a tile → Select favicon → toggle on); that choice is per-site and
+syncs across your devices.
 
 ## Bundled wallpaper images
 
