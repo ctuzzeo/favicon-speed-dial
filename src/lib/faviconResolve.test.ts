@@ -620,13 +620,14 @@ describe("getFaviconPickerCandidates", () => {
     expect(urls.some((u) => u.startsWith("https://www.openreach.com/"))).toBe(true);
     expect(urls.some((u) => u.includes("logo.clearbit.com"))).toBe(false);
     expect(urls.some((u) => u.includes("favicon.yandex.net"))).toBe(false);
-    expect(
-      urls.some(
-        (u) =>
-          u.includes("ournetwork.openreach.co.uk") ||
-          u.includes("icon.horse/icon/openreach.com"),
-      ),
-    ).toBe(true);
+    expect(urls.some((u) => u.includes("icon.horse/icon/openreach.com"))).toBe(
+      true,
+    );
+    // Effective-page-only: the original (pre-redirect) host must not appear — that's what
+    // eliminates duplicate-host rows (e.g. google.co.uk + google.com for one bookmark).
+    expect(urls.some((u) => u.includes("ournetwork.openreach.co.uk"))).toBe(
+      false,
+    );
   });
 });
 

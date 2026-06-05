@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Modal } from "#components/Modal";
 import {
   getFaviconPickerCandidates,
+  resolveFaviconForBookmark,
   type FaviconPickerOption,
 } from "#lib/faviconResolve";
 import { bookmarks } from "#stores/useBookmarks";
@@ -18,6 +19,9 @@ export const FaviconModal = observer(function FaviconModal() {
   const [candidates, setCandidates] = useState<FaviconPickerOption[]>([]);
   const [loadedUrls, setLoadedUrls] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
+  // The dial's actual current icon (auto-resolved), tracked so it can always be offered
+  // as a selectable row even when its exact source isn't one of the generated candidates.
+  const [autoUrl, setAutoUrl] = useState<string | null>(null);
 
   // Third-party providers are opt-in per site; this drives the toggle below and
   // re-fetches candidates when it's flipped.
@@ -80,6 +84,28 @@ export const FaviconModal = observer(function FaviconModal() {
     };
   }, [bookmarkURL]);
 
+  // Track the dial's actual resolved icon (the same call the dial makes — cached, so
+  // cheap) using the per-site toggle value. Lets us always offer what's on the dial.
+  useEffect(() => {
+    if (!bookmarkURL) {
+      setAutoUrl(null);
+      return;
+    }
+    let cancelled = false;
+    resolveFaviconForBookmark(bookmarkURL, () => !cancelled, {
+      externalFaviconProviders: externalOn,
+    })
+      .then((pick) => {
+        if (!cancelled) setAutoUrl(pick?.url ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setAutoUrl(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [bookmarkURL, externalOn]);
+
   function handleSelect(iconUrl: string) {
     if (!bookmarkURL) return;
     try {
@@ -103,7 +129,7 @@ export const FaviconModal = observer(function FaviconModal() {
     /* invalid bookmark URL */
   }
   const currentManual = currentHostname
-    ? settings.manualFavicons[currentHostname]
+    ? settings.manualFavicons?.[currentHostname]
     : undefined;
   // Show third-party rows only when the per-site toggle is on (so they're contacted only
   // when allowed); first-party rows always show. loadedUrls is preserved across toggles,
@@ -111,9 +137,13 @@ export const FaviconModal = observer(function FaviconModal() {
   const visibleCandidates = candidates.filter(
     (c) => externalOn || !c.thirdParty,
   );
+  // Always offer the dial's current icon first — a manual pick if set, otherwise the
+  // auto-resolved one — so what's actually on the dial is always selectable, even when
+  // its exact source isn't a generated row (e.g. a provider variant for a redirected host).
+  const currentIcon = currentManual || autoUrl || "";
   const displayCandidates =
-    currentManual && !visibleCandidates.some((c) => c.url === currentManual)
-      ? [{ name: "Current selection", url: currentManual }, ...visibleCandidates]
+    currentIcon && !visibleCandidates.some((c) => c.url === currentIcon)
+      ? [{ name: "Current icon", url: currentIcon }, ...visibleCandidates]
       : visibleCandidates;
 
   return (

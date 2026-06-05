@@ -1330,29 +1330,28 @@ export async function getFaviconPickerCandidates(
   const cached = pickerCandidateCache.get(cacheKey);
   if (cached) return cached;
 
-  const fromBookmark = buildPickerOptionsForPage(parsedInit, fullUrl, external);
-
+  // Build candidates for the FINAL page after redirects only. Building both the bookmark
+  // host and the redirected host (e.g. google.co.uk → google.com) produced duplicate
+  // rows and a list that didn't match the dial's auto-pick (which uses the final page).
   const effectiveUrl = await resolveUrlAfterRedirects(fullUrl, () => true);
   const parsedEff = parseBookmarkUrl(effectiveUrl);
+  let parsed = parsedInit;
+  let pageUrl = fullUrl;
   if (
-    !parsedEff ||
-    (parsedEff.protocol !== "http:" && parsedEff.protocol !== "https:")
+    parsedEff &&
+    (parsedEff.protocol === "http:" || parsedEff.protocol === "https:")
   ) {
-    const result = dedupePickerMergeHttpDuplicates(fromBookmark);
-    pickerCandidateCache.set(cacheKey, result);
-    return result;
+    parsed = parsedEff;
+    pageUrl = effectiveUrl;
   }
 
-  const fromEffective = buildPickerOptionsForPage(parsedEff, effectiveUrl, external);
+  const fixedOptions = buildPickerOptionsForPage(parsed, pageUrl, external);
 
-  // Surface the web-manifest and declared <link> icons the automatic resolver uses, so
-  // the picker matches the dial. Sites like eBay expose their logo only via a manifest
-  // PWA icon (on a CDN), which the fixed guesses + <link> scan above never find. Both
-  // are first-party, so they show in privacy mode too. Collapse to the largest of each
-  // type to avoid a wall of same-logo size variants; the modal hides any that 404.
+  // Add the web-manifest + declared <link> icons the automatic resolver uses (collapsed
+  // to the largest of each type). Both are first-party, so they show in privacy mode too.
   const [manifestPicks, declaredPicks] = await Promise.all([
-    fetchManifestIconCandidates(parsedEff.origin, () => true),
-    gatherHtmlDeclaredIconPicks(effectiveUrl, () => true),
+    fetchManifestIconCandidates(parsed.origin, () => true),
+    gatherHtmlDeclaredIconPicks(pageUrl, () => true),
   ]);
   const extraOptions = collapsePicksByTypeKeepLargest([
     ...manifestPicks,
@@ -1363,10 +1362,7 @@ export async function getFaviconPickerCandidates(
   }));
 
   const result = dedupePickerMergeHttpDuplicates(
-    mergePickerOptionsPreferFirst(
-      mergePickerOptionsPreferFirst(fromBookmark, fromEffective),
-      extraOptions,
-    ),
+    mergePickerOptionsPreferFirst(fixedOptions, extraOptions),
   );
   pickerCandidateCache.set(cacheKey, result);
   return result;

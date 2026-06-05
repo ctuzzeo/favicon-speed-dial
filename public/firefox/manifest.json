@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Favicon Speed Dial",
-  "version": "3.0.14",
+  "version": "3.0.15",
   "permissions": ["bookmarks", "storage", "unlimitedStorage"],
   "host_permissions": [
     "https://www.bing.com/*",
