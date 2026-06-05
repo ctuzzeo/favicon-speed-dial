@@ -3,6 +3,7 @@ import { observer } from "mobx-react-lite";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { dialColors } from "#lib/dialColors";
+import { readFaviconHint, writeFaviconHint } from "#lib/faviconHint";
 import {
   FAVICON_MIN_QUALITY_PX,
   getChromeFastHqFaviconUrl,
@@ -203,7 +204,15 @@ const Favicon = observer(function Favicon({
     const alive = () => myGen === probeGen.current;
 
     const chromeFastHq = getChromeFastHqFaviconUrl(url);
-    if (chromeFastHq) {
+    // Seed from the last resolved icon (synchronous localStorage hint) so a reload paints
+    // the final icon immediately, instead of flashing the placeholder / Chrome-native icon
+    // and then swapping when the async resolve returns.
+    const hint = readFaviconHint(url, externalFav);
+    if (hint) {
+      setHqState("ready");
+      setHqUrl(hint.url);
+      setIconWidth(hint.width);
+    } else if (chromeFastHq) {
       setHqState("ready");
       setHqUrl(chromeFastHq);
       setIconWidth(null);
@@ -220,6 +229,7 @@ const Favicon = observer(function Favicon({
       });
       if (!alive()) return;
       if (!pick) {
+        if (hint) return; // keep the last-known icon rather than blanking
         if (chromeFastHq) {
           setHqState("ready");
           setHqUrl(chromeFastHq);
@@ -234,6 +244,7 @@ const Favicon = observer(function Favicon({
       setHqUrl(pick.url);
       setIconWidth(pick.width);
       setHqState("ready");
+      writeFaviconHint(url, externalFav, { url: pick.url, width: pick.width });
     })();
 
     return () => {
