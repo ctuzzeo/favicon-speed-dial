@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Favicon Speed Dial",
-  "version": "3.0.20",
+  "version": "3.0.21",
   "permissions": ["bookmarks", "storage", "unlimitedStorage"],
   "host_permissions": [
     "https://www.bing.com/*",
@@ -20,6 +20,9 @@
         "required": ["none"],
         "optional": []
       }
+    },
+    "gecko_android": {
+      "strict_min_version": "142.0"
     }
   },
   "description": "Replaces the new tab page with a colourful grid of your bookmarks and folders, with large favicons and custom wallpapers.",
