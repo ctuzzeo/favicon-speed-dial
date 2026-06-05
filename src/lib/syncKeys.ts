@@ -10,6 +10,9 @@
 export const MANUAL_FAVICON_INFIX = "manual-favicon:";
 export const SITE_IMAGE_INFIX = "site-image:";
 export const EXTERNAL_HOST_INFIX = "external-host:";
+/** Per-site background colour (hex) and transparency ("1"/"0"), keyed by hostname. */
+export const SITE_COLOR_INFIX = "site-color:";
+export const SITE_TRANSPARENT_INFIX = "site-transparent:";
 
 export function perSiteKey(
   apiVersion: string,

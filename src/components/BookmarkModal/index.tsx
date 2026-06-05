@@ -11,6 +11,9 @@ import { CaretDown } from "#components/icons/CaretDown.tsx";
 import { Modal } from "#components/Modal";
 import { Switch } from "#components/SettingsContent/Switch";
 import { dialColors } from "#lib/dialColors";
+import { resolveFaviconForBookmark } from "#lib/faviconResolve";
+import { getImageDominantColor } from "#lib/imageColor";
+import { hostnameForSiteKey } from "#lib/syncKeys";
 import { bookmarks } from "#stores/useBookmarks";
 import { colorPicker } from "#stores/useColorPicker";
 import { modals } from "#stores/useModals";
@@ -29,6 +32,7 @@ export const BookmarkModal = observer(function BookmarkModal() {
   );
   const [customDialColor, setCustomDialColor] = useState("");
   const [isTransparent, setIsTransparent] = useState(true);
+  const [iconColor, setIconColor] = useState<string | null>(null);
   const isEditing = modals.editingBookmarkId !== null;
   const bookmarkType = modals.isOpen?.includes("folder")
     ? "folder"
@@ -46,11 +50,23 @@ export const BookmarkModal = observer(function BookmarkModal() {
           setBookmarkTitle(bookmark.title || "");
           setBookmarkURL(bookmark.url || "");
           setparentFolderId(bookmark.parentId || "");
-          // Load the custom dial color for this bookmark, if set.
-          const customColor = settings.dialColors[modals.editingBookmarkId];
-          setCustomDialColor(customColor || "");
-          // Load transparent preference. Default to true if not explicitly set.
-          const transparent = settings.dialTransparent[modals.editingBookmarkId] ?? true;
+          // Colour + transparency are per-site (hostname) for bookmarks, with the legacy
+          // by-id values as a fallback; folders stay keyed by id.
+          const host = bookmark.url ? hostnameForSiteKey(bookmark.url) : "";
+          const customColor =
+            (host && settings.siteColors[host]) ||
+            settings.dialColors[modals.editingBookmarkId] ||
+            "";
+          setCustomDialColor(customColor);
+          const rawTransparent = host
+            ? settings.siteTransparent[host]
+            : undefined;
+          const transparent =
+            rawTransparent === "1"
+              ? true
+              : rawTransparent === "0"
+                ? false
+                : (settings.dialTransparent[modals.editingBookmarkId] ?? true);
           setIsTransparent(transparent);
         }
       } else {
@@ -63,9 +79,38 @@ export const BookmarkModal = observer(function BookmarkModal() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modals.editingBookmarkId]);
 
-  const defaultDialColor = dialColors(
+  // Detect the favicon's dominant colour so the editor can auto-match it when Transparent
+  // is turned off. Mirrors what the dial shows (a manual pick, else the auto-resolved icon).
+  useEffect(() => {
+    setIconColor(null);
+    const url = editingBookmark?.url;
+    if (bookmarkType !== "bookmark" || !url) return;
+    let cancelled = false;
+    void (async () => {
+      const host = hostnameForSiteKey(url);
+      let iconUrl = host ? settings.manualFavicons?.[host] : undefined;
+      if (!iconUrl) {
+        const pick = await resolveFaviconForBookmark(url, () => !cancelled, {
+          externalFaviconProviders: settings.externalAllowedForUrl(url),
+        });
+        iconUrl = pick?.url;
+      }
+      if (cancelled || !iconUrl) return;
+      const color = await getImageDominantColor(iconUrl);
+      if (!cancelled && color) setIconColor(color);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [editingBookmark?.url, bookmarkType]);
+
+  const nameHashColor = dialColors(
     getLinkName(bookmarkType === "folder" ? bookmarkTitle : bookmarkURL),
   );
+  // For a bookmark, the default colour is the favicon's dominant colour (auto-match) when
+  // detected; otherwise the name-hash colour. Folders always use the name-hash colour.
+  const defaultDialColor =
+    (bookmarkType === "bookmark" && iconColor) || nameHashColor;
   const dialColor = customDialColor
     ? customDialColor
     : (bookmarkType === "folder" && bookmarkTitle) ||
@@ -76,18 +121,26 @@ export const BookmarkModal = observer(function BookmarkModal() {
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (isEditing) {
-      // Save a custom dial color if it differs from the default.
-      // Remove the custom dial color if it matches the default.
-      const color = dialColor !== defaultDialColor ? customDialColor : "";
-      if (color && modals.editingBookmarkId) {
-        settings.handleDialColors(modals.editingBookmarkId, color);
-      } else if (modals.editingBookmarkId) {
-        settings.handleClearColor(modals.editingBookmarkId);
-      }
-
-      // Save transparent preference.
-      if (modals.editingBookmarkId) {
-        settings.handleDialTransparent(modals.editingBookmarkId, isTransparent);
+      // Persist colour + transparency. Bookmarks key these per-site (hostname) so the
+      // change applies to every bookmark of that domain; folders (and any host-less
+      // bookmark) stay by id. When not transparent, the colour saved is the shown colour
+      // — a custom pick, else the auto-matched favicon colour.
+      const id = modals.editingBookmarkId;
+      const host =
+        bookmarkType === "bookmark" && bookmarkURL
+          ? hostnameForSiteKey(bookmarkURL)
+          : "";
+      const colorToSave =
+        customDialColor || (!isTransparent ? defaultDialColor : "");
+      const saveColor = Boolean(colorToSave) && colorToSave !== nameHashColor;
+      if (host) {
+        settings.handleSiteTransparent(host, isTransparent);
+        if (saveColor) settings.handleSiteColor(host, colorToSave);
+        else settings.handleClearSiteColor(host);
+      } else if (id) {
+        settings.handleDialTransparent(id, isTransparent);
+        if (saveColor) settings.handleDialColors(id, colorToSave);
+        else settings.handleClearColor(id);
       }
       // Determine which bookmark details have changed.
       const detailsChanged =
@@ -140,12 +193,21 @@ export const BookmarkModal = observer(function BookmarkModal() {
         title: bookmarkTitle,
         parentId: parentFolderId,
       });
-      if (dialColor !== defaultDialColor) {
-        // Save a custom dial color if it differs from the default.
-        settings.handleDialColors(newBookmark.id, customDialColor);
+      // New bookmarks key colour/transparency per-site too; folders stay by id.
+      const host =
+        bookmarkType === "bookmark" && bookmarkURL
+          ? hostnameForSiteKey(bookmarkURL)
+          : "";
+      const colorToSave =
+        customDialColor || (!isTransparent ? defaultDialColor : "");
+      const saveColor = Boolean(colorToSave) && colorToSave !== nameHashColor;
+      if (host) {
+        settings.handleSiteTransparent(host, isTransparent);
+        if (saveColor) settings.handleSiteColor(host, colorToSave);
+      } else {
+        settings.handleDialTransparent(newBookmark.id, isTransparent);
+        if (saveColor) settings.handleDialColors(newBookmark.id, colorToSave);
       }
-      // Save transparent preference.
-      settings.handleDialTransparent(newBookmark.id, isTransparent);
       modals.closeModal({
         focusAfterClosed: () =>
           document.querySelector(`[data-id="${newBookmark.id}"]`),

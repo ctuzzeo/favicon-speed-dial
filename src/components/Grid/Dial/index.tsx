@@ -46,13 +46,25 @@ interface TitleProps {
   type: "bookmark" | "folder";
 }
 
+/** Per-site transparency ("1"/"0") wins; otherwise fall back to the legacy by-id value. */
+function resolveTransparent(
+  raw: string | undefined,
+  legacy: boolean | undefined,
+): boolean {
+  if (raw === "1") return true;
+  if (raw === "0") return false;
+  return legacy ?? true;
+}
+
 export const Dial = observer(function Dial(props: DialProps) {
-  const backgroundColor = settings.dialColors[props.id]
-    ? settings.dialColors[props.id]
-    : dialColors(props.name);
-  // Bookmark images sync per-site (keyed by hostname); folders + legacy stay by id.
+  // Bookmark colour/image/transparency sync per-site (keyed by hostname); folders + legacy
+  // by-id entries remain as a read fallback. Per-site values win.
   const siteHost =
     props.type === "bookmark" && props.url ? hostnameForSiteKey(props.url) : "";
+  const customColor =
+    (siteHost && settings.siteColors?.[siteHost]) ||
+    settings.dialColors[props.id];
+  const backgroundColor = customColor || dialColors(props.name);
   const backgroundImage =
     (siteHost && settings.siteImages?.[siteHost]) ||
     settings.dialImages?.[props.id];
@@ -67,9 +79,13 @@ export const Dial = observer(function Dial(props: DialProps) {
     </div>
   );
 
-  const isTransparent = props.type === "bookmark" 
-    ? (settings.dialTransparent[props.id] ?? true)
-    : false;
+  const isTransparent =
+    props.type === "bookmark"
+      ? resolveTransparent(
+          siteHost ? settings.siteTransparent?.[siteHost] : undefined,
+          settings.dialTransparent[props.id],
+        )
+      : false;
 
   return (
     <a

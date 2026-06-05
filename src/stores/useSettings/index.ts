@@ -31,7 +31,9 @@ import {
   mergeLegacyAndPerSite,
   parsePerSiteKey,
   perSiteKey,
+  SITE_COLOR_INFIX,
   SITE_IMAGE_INFIX,
+  SITE_TRANSPARENT_INFIX,
 } from "#lib/syncKeys";
 
 // ==================================================================
@@ -104,6 +106,13 @@ const defaultSettings = {
   manualFavicons: {} as ManualFavicons,
   dialSize: "small",
   dialTransparent: {} as Record<string, boolean>,
+  /**
+   * Per-site (hostname) background colour (hex) and transparency ("1"/"0"). Synced
+   * per-site like siteImages so a colour/transparency edit applies to every bookmark of
+   * that domain. Legacy by-id dialColors/dialTransparent remain as a read fallback.
+   */
+  siteColors: {} as Record<string, string>,
+  siteTransparent: {} as Record<string, string>,
   maxColumns: "7",
   newTab: true,
   squareDials: true,
@@ -180,6 +189,16 @@ export const settings = makeAutoObservable({
           storage,
           apiVersion,
           SITE_IMAGE_INFIX,
+        );
+        settings.siteColors = collectPerSiteEntries(
+          storage,
+          apiVersion,
+          SITE_COLOR_INFIX,
+        );
+        settings.siteTransparent = collectPerSiteEntries(
+          storage,
+          apiVersion,
+          SITE_TRANSPARENT_INFIX,
         );
         settings.dialSize = readStorageStringOrFallback(
           storage,
@@ -733,6 +752,30 @@ export const settings = makeAutoObservable({
     });
   },
 
+  /** Per-site (hostname) background colour — applies to every bookmark of that domain. */
+  handleSiteColor(host: string, color: string) {
+    if (!host) return;
+    runInAction(() => set(settings.siteColors, host, color));
+    settings._savePerSite(SITE_COLOR_INFIX, host, color);
+    bc.postMessage({ siteColors: { ...settings.siteColors } });
+  },
+
+  handleClearSiteColor(host: string) {
+    if (!host || !settings.siteColors[host]) return;
+    runInAction(() => remove(settings.siteColors, host));
+    settings._removePerSite(SITE_COLOR_INFIX, host);
+    bc.postMessage({ siteColors: { ...settings.siteColors } });
+  },
+
+  /** Per-site (hostname) transparency — applies to every bookmark of that domain. */
+  handleSiteTransparent(host: string, value: boolean) {
+    if (!host) return;
+    const raw = value ? "1" : "0";
+    runInAction(() => set(settings.siteTransparent, host, raw));
+    settings._savePerSite(SITE_TRANSPARENT_INFIX, host, raw);
+    bc.postMessage({ siteTransparent: { ...settings.siteTransparent } });
+  },
+
   handleDialTransparent(id: string, value: boolean) {
     runInAction(() => {
       set(settings.dialTransparent, id, value);
@@ -870,6 +913,30 @@ if (browser.storage.onChanged) {
               set(settings.externalProviderHosts, extHost, newValue);
             } else {
               remove(settings.externalProviderHosts, extHost);
+            }
+            continue;
+          }
+          // Per-site background colour keys.
+          const colorHost = parsePerSiteKey(apiVersion, SITE_COLOR_INFIX, key);
+          if (colorHost) {
+            if (typeof newValue === "string") {
+              set(settings.siteColors, colorHost, newValue);
+            } else {
+              remove(settings.siteColors, colorHost);
+            }
+            continue;
+          }
+          // Per-site transparency keys.
+          const transHost = parsePerSiteKey(
+            apiVersion,
+            SITE_TRANSPARENT_INFIX,
+            key,
+          );
+          if (transHost) {
+            if (typeof newValue === "string") {
+              set(settings.siteTransparent, transHost, newValue);
+            } else {
+              remove(settings.siteTransparent, transHost);
             }
             continue;
           }
