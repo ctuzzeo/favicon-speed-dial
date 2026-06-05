@@ -153,14 +153,6 @@ export const FaviconModal = observer(function FaviconModal() {
       height="min(78vh, 680px)"
     >
       <div className="FaviconModal">
-        <p className="description">
-          Choose the best quality icon for{" "}
-          <strong>{bookmarkURL || "this bookmark"}</strong>. The same sources
-          are tried for every site; only icons that load on this origin are shown
-          (missing rows usually mean that path is not hosted here, e.g. touch
-          icons on a CDN).
-        </p>
-
         {bookmarkURL && (
           <label
             style={{

@@ -165,33 +165,6 @@ export const SettingsContent = observer(function SettingsContent() {
       </div>
       <div className="setting-wrapper setting-group">
         <div className="setting-label">
-          <div className="setting-title" id="remember-last-folder-title">
-            Remember last opened folder
-          </div>
-          <div
-            className="setting-description"
-            id="remember-last-folder-description"
-          >
-            Reopen the last folder after restart. URL hash on this page wins if
-            set.
-          </div>
-        </div>
-        <div className="setting-option toggle">
-          <Switch
-            aria-labelledby="remember-last-folder-title"
-            aria-describedby="remember-last-folder-description"
-            onClick={() =>
-              handleRememberLastFolder(!settings.rememberLastFolder)
-            }
-            className="switch-root"
-            checked={settings.rememberLastFolder as boolean}
-          >
-            <span className="switch-thumb" />
-          </Switch>
-        </div>
-      </div>
-      <div className="setting-wrapper setting-group">
-        <div className="setting-label">
           <div className="setting-title" id="color-scheme-title">
             Color Scheme
           </div>
@@ -214,6 +187,32 @@ export const SettingsContent = observer(function SettingsContent() {
             ))}
           </select>
           <CaretDown />
+        </div>
+      </div>
+      <div className="setting-wrapper setting-group">
+        <div className="setting-label">
+          <div className="setting-title" id="remember-last-folder-title">
+            Remember last opened folder
+          </div>
+          <div
+            className="setting-description"
+            id="remember-last-folder-description"
+          >
+            Reopen the last folder after restart.
+          </div>
+        </div>
+        <div className="setting-option toggle">
+          <Switch
+            aria-labelledby="remember-last-folder-title"
+            aria-describedby="remember-last-folder-description"
+            onClick={() =>
+              handleRememberLastFolder(!settings.rememberLastFolder)
+            }
+            className="switch-root"
+            checked={settings.rememberLastFolder as boolean}
+          >
+            <span className="switch-thumb" />
+          </Switch>
         </div>
       </div>
       <div className="setting-wrapper setting-group">
@@ -244,8 +243,7 @@ export const SettingsContent = observer(function SettingsContent() {
           </div>
           <div className="setting-description" id="sync-settings-description">
             Synchronize your settings across devices when signed into your
-            browser account. Per-site custom icons sync; the full-screen
-            wallpaper image stays on this device.
+            browser account.
           </div>
         </div>
         <div className="setting-option toggle">
