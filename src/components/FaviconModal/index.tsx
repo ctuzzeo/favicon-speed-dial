@@ -22,50 +22,62 @@ export const FaviconModal = observer(function FaviconModal() {
   // re-fetches candidates when it's flipped.
   const externalOn = settings.externalAllowedForUrl(bookmarkURL);
 
+  // Resolve the bookmark's URL when the editing target changes. Kept separate from the
+  // candidate fetch so the per-host toggle (externalOn) can't feed back into bookmarkURL
+  // and cause the effect to loop.
   useEffect(() => {
     let cancelled = false;
-
-    async function loadBookmarkData() {
-      setLoading(true);
-      setBookmarkURL("");
-      setCandidates([]);
-      setLoadedUrls({});
-
-      const editingId = editingBookmarkId;
-      if (!editingId) {
-        setLoading(false);
-        return;
-      }
-
-      const bookmark = await bookmarks.getBookmarkById(editingId);
+    setLoading(true);
+    setBookmarkURL("");
+    setCandidates([]);
+    setLoadedUrls({});
+    if (!editingBookmarkId) {
+      setLoading(false);
+      return;
+    }
+    bookmarks.getBookmarkById(editingBookmarkId).then((bookmark) => {
       if (cancelled) return;
-
+      let url = "";
       if (bookmark?.url) {
         try {
           new URL(bookmark.url);
-          setBookmarkURL(bookmark.url);
-          setCandidates(
-            await getFaviconPickerCandidates(bookmark.url, {
-              externalFaviconProviders: settings.externalAllowedForUrl(
-                bookmark.url,
-              ),
-            }),
-          );
+          url = bookmark.url;
         } catch {
-          setBookmarkURL("");
-          setCandidates([]);
+          /* invalid bookmark URL */
         }
       }
-
-      if (!cancelled) setLoading(false);
-    }
-
-    void loadBookmarkData();
+      setBookmarkURL(url);
+      if (!url) setLoading(false);
+    });
     return () => {
       cancelled = true;
     };
-    /* Re-fetch candidates when the per-site provider toggle changes. */
-  }, [editingBookmarkId, externalOn]);
+  }, [editingBookmarkId]);
+
+  // Fetch candidates for the resolved URL + the current per-site provider setting.
+  // Re-runs when the toggle (externalOn) flips. (Results are cached, so re-opening the
+  // same site is instant.)
+  useEffect(() => {
+    if (!bookmarkURL) return;
+    let cancelled = false;
+    setLoading(true);
+    setCandidates([]);
+    setLoadedUrls({});
+    getFaviconPickerCandidates(bookmarkURL, {
+      externalFaviconProviders: externalOn,
+    })
+      .then((found) => {
+        if (cancelled) return;
+        setCandidates(found);
+        setLoading(false);
+      })
+      .catch(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [bookmarkURL, externalOn]);
 
   function handleSelect(iconUrl: string) {
     if (!bookmarkURL) return;

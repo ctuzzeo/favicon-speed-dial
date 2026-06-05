@@ -1307,6 +1307,9 @@ function collapsePicksByTypeKeepLargest(picks: FaviconPick[]): FaviconPick[] {
   return [...bestByType.values()];
 }
 
+/** Session cache of generated picker candidate lists, keyed by `e|i:url`. */
+const pickerCandidateCache = new Map<string, FaviconPickerOption[]>();
+
 export async function getFaviconPickerCandidates(
   fullUrl: string,
   options?: FaviconPickerLoadOptions,
@@ -1320,6 +1323,10 @@ export async function getFaviconPickerCandidates(
     return [];
   }
 
+  const cacheKey = `${external ? "e" : "i"}:${fullUrl}`;
+  const cached = pickerCandidateCache.get(cacheKey);
+  if (cached) return cached;
+
   const fromBookmark = buildPickerOptionsForPage(parsedInit, fullUrl, external);
 
   const effectiveUrl = await resolveUrlAfterRedirects(fullUrl, () => true);
@@ -1328,7 +1335,9 @@ export async function getFaviconPickerCandidates(
     !parsedEff ||
     (parsedEff.protocol !== "http:" && parsedEff.protocol !== "https:")
   ) {
-    return dedupePickerMergeHttpDuplicates(fromBookmark);
+    const result = dedupePickerMergeHttpDuplicates(fromBookmark);
+    pickerCandidateCache.set(cacheKey, result);
+    return result;
   }
 
   const fromEffective = buildPickerOptionsForPage(parsedEff, effectiveUrl, external);
@@ -1350,12 +1359,14 @@ export async function getFaviconPickerCandidates(
     url: pick.url,
   }));
 
-  return dedupePickerMergeHttpDuplicates(
+  const result = dedupePickerMergeHttpDuplicates(
     mergePickerOptionsPreferFirst(
       mergePickerOptionsPreferFirst(fromBookmark, fromEffective),
       extraOptions,
     ),
   );
+  pickerCandidateCache.set(cacheKey, result);
+  return result;
 }
 
 function probeImageSrcForPick(
