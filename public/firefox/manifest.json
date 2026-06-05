@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Favicon Speed Dial",
-  "version": "3.0.18",
+  "version": "3.0.19",
   "permissions": ["bookmarks", "storage", "unlimitedStorage"],
   "host_permissions": [
     "https://www.bing.com/*",
@@ -22,7 +22,7 @@
       }
     }
   },
-  "description": "Favicon Speed Dial replaces the new tab page with a colourful grid of your bookmarks and folders, with large favicons and custom wallpapers.",
+  "description": "Replaces the new tab page with a colourful grid of your bookmarks and folders, with large favicons and custom wallpapers.",
   "chrome_url_overrides": {
     "newtab": "index.html"
   },
