@@ -197,7 +197,7 @@ export const SettingsContent = observer(function SettingsContent() {
             Color Scheme
           </div>
           <div className="setting-description" id="color-scheme-description">
-            Choose the color scheme for Favicon Speed Dial.
+            Light, Dark, or Automatic (matches the wallpaper&rsquo;s brightness).
           </div>
         </div>
         <div className="setting-option select">

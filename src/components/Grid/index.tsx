@@ -5,10 +5,8 @@ import Sortable from "sortablejs";
 
 import "./styles.css";
 
-import { contrastRatio } from "random-color-library";
-
 import { BookmarkSectionBar } from "#components/BookmarkSectionBar";
-import { getImageAverageColor } from "#lib/imageLuminance";
+import { getBackgroundIsDark } from "#lib/backgroundLuminance";
 import { bookmarks } from "#stores/useBookmarks";
 import { settings } from "#stores/useSettings";
 import { Dial } from "./Dial/index.tsx";
@@ -79,34 +77,11 @@ export const Grid = observer(function Grid() {
     }
 
     const updateGearColor = async () => {
-      const rootElement = document.documentElement;
-      const computedStyle = window.getComputedStyle(rootElement);
-      const bgColor = computedStyle.backgroundColor;
-
-      // Handle background image (rgba indicates transparent background with image)
-      if (bgColor.startsWith("rgba")) {
-        const backgroundImage = computedStyle.backgroundImage;
-        const match = backgroundImage.match(/url\(['"]?([^'"]*?)['"]?\)/);
-        const backgroundImageUrl = match?.[1];
-
-        if (!backgroundImageUrl) {
-          setGearColor(null);
-        } else {
-          try {
-            const averageLuminance =
-              await getImageAverageColor(backgroundImageUrl);
-            setGearColor(averageLuminance < 0.5 ? "#ffffff" : "#000000");
-          } catch (error) {
-            console.warn("Failed to calculate image-based gear color:", error);
-            setGearColor(null);
-          }
-        }
-      } else {
-        // Handle solid background color
-        const whiteContrast = contrastRatio(bgColor, "#ffffff");
-        const blackContrast = contrastRatio(bgColor, "#000000");
-
-        setGearColor(whiteContrast > blackContrast ? "#ffffff" : "#000000");
+      try {
+        setGearColor((await getBackgroundIsDark()) ? "#ffffff" : "#000000");
+      } catch (error) {
+        console.warn("Failed to calculate gear color:", error);
+        setGearColor(null);
       }
     };
 

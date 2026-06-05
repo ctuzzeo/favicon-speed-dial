@@ -1,11 +1,19 @@
 import { clsx } from "clsx/lite";
-import { autorun, makeAutoObservable, remove, runInAction, set } from "mobx";
+import {
+  autorun,
+  makeAutoObservable,
+  reaction,
+  remove,
+  runInAction,
+  set,
+} from "mobx";
 import browser from "webextension-polyfill";
 
 import {
   assertBingCdnHttpsUrl,
   buildBingWallpaperUrlFromHpApiPath,
 } from "#lib/bingWallpaperUrl";
+import { getBackgroundIsDark } from "#lib/backgroundLuminance";
 import { compressImageToDataUrl } from "#lib/imageCompress";
 import {
   readStorageBoolean,
@@ -58,9 +66,11 @@ function todayDateString() {
 }
 
 function getColorScheme(value: string) {
-  return (value === "System Theme" && prefersDarkMode()) || value === "Dark"
-    ? "color-scheme-dark"
-    : "color-scheme-light";
+  if (value === "Dark") return "color-scheme-dark";
+  if (value === "Light") return "color-scheme-light";
+  // "System Theme" is the "Automatic" option: refined from the wallpaper's brightness
+  // by the luminance reaction below. This is just the provisional value until then.
+  return prefersDarkMode() ? "color-scheme-dark" : "color-scheme-light";
 }
 
 const bc = new BroadcastChannel("favicon-speed-dial-settings");
@@ -777,6 +787,36 @@ autorun(() => {
     root.style.removeProperty("--background-color");
   }
 });
+
+// "Automatic" color scheme: derive light/dark text from the wallpaper's brightness
+// (dark background → light text). Registered after the wallpaper autorun so the
+// background is applied first; the async measure is guarded with a generation counter.
+let autoSchemeGen = 0;
+reaction(
+  () => ({
+    isLoaded: settings.isLoaded,
+    themeOption: settings.themeOption,
+    wallpaper: settings.wallpaper,
+    customImage: settings.customImage,
+    customColor: settings.customColor,
+    bingWallpaperUrl: settings.bingWallpaperUrl,
+  }),
+  ({ isLoaded, themeOption }) => {
+    if (!isLoaded || themeOption !== "System Theme") return;
+    const gen = ++autoSchemeGen;
+    getBackgroundIsDark()
+      .then((isDark) => {
+        if (gen !== autoSchemeGen) return;
+        runInAction(() => {
+          settings.colorScheme = isDark
+            ? "color-scheme-dark"
+            : "color-scheme-light";
+        });
+      })
+      .catch(() => {});
+  },
+  { fireImmediately: true },
+);
 
 // Initialize on load
 settings.initialize();
