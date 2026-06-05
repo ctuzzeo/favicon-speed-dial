@@ -434,6 +434,14 @@ describe("getFaviconPickerCandidates", () => {
     const list = await getFaviconPickerCandidates(url);
     const urls = list.map((x) => x.url);
     expect(urls.some((u) => u.includes("t2.gstatic.com/faviconV2"))).toBe(true);
+    // Mirror rows are tagged third-party so the modal can show them only when opted in;
+    // first-party rows are not tagged.
+    expect(list.find((o) => o.url.includes("t2.gstatic.com"))?.thirdParty).toBe(
+      true,
+    );
+    expect(
+      list.find((o) => o.url.endsWith("/favicon.svg"))?.thirdParty,
+    ).toBeFalsy();
     expect(
       urls.some((u) => u.includes("google.com/s2/favicons") && u.includes("sz=256")),
     ).toBe(true);

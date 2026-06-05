@@ -2,7 +2,10 @@ import { observer } from "mobx-react-lite";
 import { useEffect, useState } from "react";
 
 import { Modal } from "#components/Modal";
-import { getFaviconPickerCandidates } from "#lib/faviconResolve";
+import {
+  getFaviconPickerCandidates,
+  type FaviconPickerOption,
+} from "#lib/faviconResolve";
 import { bookmarks } from "#stores/useBookmarks";
 import { modals } from "#stores/useModals";
 import { settings } from "#stores/useSettings";
@@ -12,9 +15,7 @@ import "./styles.css";
 export const FaviconModal = observer(function FaviconModal() {
   const editingBookmarkId = modals.editingBookmarkId;
   const [bookmarkURL, setBookmarkURL] = useState("");
-  const [candidates, setCandidates] = useState<{ name: string; url: string }[]>(
-    [],
-  );
+  const [candidates, setCandidates] = useState<FaviconPickerOption[]>([]);
   const [loadedUrls, setLoadedUrls] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
 
@@ -54,18 +55,18 @@ export const FaviconModal = observer(function FaviconModal() {
     };
   }, [editingBookmarkId]);
 
-  // Fetch candidates for the resolved URL + the current per-site provider setting.
-  // Re-runs when the toggle (externalOn) flips. (Results are cached, so re-opening the
-  // same site is instant.)
+  // Fetch the full candidate list once per bookmark (third-party rows are included but
+  // tagged). The toggle only filters what's shown — it never re-fetches — so flipping it
+  // is instant and never re-searches first-party sources. Third-party rows are only
+  // rendered (and thus only contacted) when the toggle is on. Results are cached, so
+  // re-opening the same site is instant.
   useEffect(() => {
     if (!bookmarkURL) return;
     let cancelled = false;
     setLoading(true);
     setCandidates([]);
     setLoadedUrls({});
-    getFaviconPickerCandidates(bookmarkURL, {
-      externalFaviconProviders: externalOn,
-    })
+    getFaviconPickerCandidates(bookmarkURL, { externalFaviconProviders: true })
       .then((found) => {
         if (cancelled) return;
         setCandidates(found);
@@ -77,7 +78,7 @@ export const FaviconModal = observer(function FaviconModal() {
     return () => {
       cancelled = true;
     };
-  }, [bookmarkURL, externalOn]);
+  }, [bookmarkURL]);
 
   function handleSelect(iconUrl: string) {
     if (!bookmarkURL) return;
@@ -104,10 +105,16 @@ export const FaviconModal = observer(function FaviconModal() {
   const currentManual = currentHostname
     ? settings.manualFavicons[currentHostname]
     : undefined;
+  // Show third-party rows only when the per-site toggle is on (so they're contacted only
+  // when allowed); first-party rows always show. loadedUrls is preserved across toggles,
+  // so already-loaded icons don't vanish when flipping it off.
+  const visibleCandidates = candidates.filter(
+    (c) => externalOn || !c.thirdParty,
+  );
   const displayCandidates =
-    currentManual && !candidates.some((c) => c.url === currentManual)
-      ? [{ name: "Current selection", url: currentManual }, ...candidates]
-      : candidates;
+    currentManual && !visibleCandidates.some((c) => c.url === currentManual)
+      ? [{ name: "Current selection", url: currentManual }, ...visibleCandidates]
+      : visibleCandidates;
 
   return (
     <Modal

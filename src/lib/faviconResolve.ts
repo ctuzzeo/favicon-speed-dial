@@ -881,6 +881,8 @@ function firstGstaticMirrorCandidate(
 export interface FaviconPickerOption {
   name: string;
   url: string;
+  /** True for third-party mirror sources (Google, gstatic, DDG, …); first-party otherwise. */
+  thirdParty?: boolean;
 }
 
 function mergePickerOptionsPreferFirst(
@@ -1251,6 +1253,7 @@ function buildPickerOptionsForPage(
       out.push({
         name: `${mirrorLabels[c.type] ?? c.type} · ${host}`,
         url: c.url,
+        thirdParty: true,
       });
     }
   }
