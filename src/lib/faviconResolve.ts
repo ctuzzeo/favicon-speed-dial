@@ -28,10 +28,13 @@
  * trailing labels (`google.co.uk`, not `co.uk`).
  *
  * **HTML `<link>` discovery** runs during automatic resolution (not only the picker):
- * a bounded read of the bookmark's `<head>` parses declared icon links and follows
- * their hrefs **even cross-origin**. A site's own declared icon is first-party (unlike
- * domain-keyed favicon aggregators, which the `externalFaviconProviders` toggle gates),
- * so this also runs in privacy mode.
+ * a bounded read of the bookmark's `<head>` parses declared icon links and follows their
+ * hrefs, same-origin or not. An off-site href — like a domain-keyed aggregator — is only
+ * followed when `externalFaviconProviders` is on for that site; a same-registrable-site
+ * href (its own CDN) always is. Manifest icon `src` values are gated the same way. The
+ * manual picker applies the identical rule: same-site declared/manifest icons always
+ * show, off-site ones are tagged third-party (like mirror providers) and only surfaced
+ * when the per-site toggle is on.
  */
 import { get, set } from "idb-keyval";
 
@@ -197,6 +200,20 @@ function naiveRegistrableHost(hostname: string): string {
 }
 
 /**
+ * True when `url`'s host shares a registrable domain with `pageHostname` (e.g. a CDN
+ * subdomain of the same site). Used to gate manifest / declared `<link>` icon hrefs that
+ * point off-site: those are a different origin's resource, not "the page's own icon", so
+ * they're held to the same `externalFaviconProviders` opt-in as mirror providers.
+ */
+export function isSameSiteAsPage(url: string, pageHostname: string): boolean {
+  try {
+    return naiveRegistrableHost(new URL(url).hostname) === naiveRegistrableHost(pageHostname);
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Hostnames for third-party favicon mirrors: **registrable domain first**, then the
  * full host when they differ (e.g. `playstation.com`, then `library.playstation.com`).
  */
@@ -205,6 +222,29 @@ export function mirrorHostnamesForFavicon(hostname: string): string[] {
   const apex = naiveRegistrableHost(hostname);
   if (h.toLowerCase() === apex) return [h];
   return [apex, h];
+}
+
+/** Hostnames of the fixed third-party mirror providers built by
+ * {@link buildMirrorFaviconCandidatesForSingleHost} — kept in sync with that function. */
+const THIRD_PARTY_FAVICON_HOSTNAMES = new Set([
+  "www.google.com",
+  "t2.gstatic.com",
+  "icon.horse",
+  "unavatar.io",
+  "icons.duckduckgo.com",
+]);
+
+/**
+ * True when `url` points at one of the fixed third-party mirror providers. Used to keep a
+ * previously-saved favicon (e.g. a manual pick made while providers were on) from being
+ * surfaced/loaded once the per-site external-provider toggle is off.
+ */
+export function isThirdPartyFaviconUrl(url: string): boolean {
+  try {
+    return THIRD_PARTY_FAVICON_HOSTNAMES.has(new URL(url).hostname);
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -1348,18 +1388,34 @@ export async function getFaviconPickerCandidates(
   const fixedOptions = buildPickerOptionsForPage(parsed, pageUrl, external);
 
   // Add the web-manifest + declared <link> icons the automatic resolver uses (collapsed
-  // to the largest of each type). Both are first-party, so they show in privacy mode too.
+  // to the largest of each type). A same-registrable-site icon is first-party and always
+  // shown; an off-site one (e.g. a CDN on a different domain) is tagged third-party —
+  // same as mirror providers — and only included when third-party providers are allowed,
+  // so the per-site toggle governs it consistently everywhere.
   const [manifestPicks, declaredPicks] = await Promise.all([
     fetchManifestIconCandidates(parsed.origin, () => true),
     gatherHtmlDeclaredIconPicks(pageUrl, () => true),
   ]);
-  const extraOptions = collapsePicksByTypeKeepLargest([
-    ...manifestPicks,
-    ...declaredPicks,
-  ]).map((pick) => ({
-    name: pickerCandidateName(pick.type, pick.width),
-    url: pick.url,
-  }));
+  const allExtraPicks = [...manifestPicks, ...declaredPicks];
+  const sameSitePicks = allExtraPicks.filter((p) =>
+    isSameSiteAsPage(p.url, parsed.hostname),
+  );
+  const offSitePicks = allExtraPicks.filter(
+    (p) => !isSameSiteAsPage(p.url, parsed.hostname),
+  );
+  const extraOptions = [
+    ...collapsePicksByTypeKeepLargest(sameSitePicks).map((pick) => ({
+      name: pickerCandidateName(pick.type, pick.width),
+      url: pick.url,
+    })),
+    ...(external
+      ? collapsePicksByTypeKeepLargest(offSitePicks).map((pick) => ({
+          name: pickerCandidateName(pick.type, pick.width),
+          url: pick.url,
+          thirdParty: true,
+        }))
+      : []),
+  ];
 
   const result = dedupePickerMergeHttpDuplicates(
     mergePickerOptionsPreferFirst(fixedOptions, extraOptions),
@@ -1502,8 +1558,13 @@ async function probePageForFavicon(
   }
 
   if (!alive()) return null;
-  const manifest = await fetchManifestIconCandidates(parsed.origin, alive);
+  const manifestAll = await fetchManifestIconCandidates(parsed.origin, alive);
   if (!alive()) return null;
+  // A manifest icon `src` can be an absolute URL pointing anywhere; only trust off-site
+  // ones when third-party providers are allowed for this site.
+  const manifest = externalFaviconProviders
+    ? manifestAll
+    : manifestAll.filter((c) => isSameSiteAsPage(c.url, parsed.hostname));
 
   const t1 = tier1Candidates(parsed, pageUrl);
   /*
@@ -1576,7 +1637,11 @@ async function probePageForFavicon(
       bestAType === "gstatic" ||
       bestAType === "duckduckgo";
     if (shouldTryHtml) {
-      const htmlCandidates = await gatherHtmlDeclaredIconPicks(pageUrl, alive);
+      const htmlCandidatesAll = await gatherHtmlDeclaredIconPicks(pageUrl, alive);
+      // A declared <link> href can point off-site too; same opt-in as manifest icons.
+      const htmlCandidates = externalFaviconProviders
+        ? htmlCandidatesAll
+        : htmlCandidatesAll.filter((c) => isSameSiteAsPage(c.url, parsed.hostname));
       if (alive() && htmlCandidates.length > 0) {
         const htmlResults = await probeQueueWithSlots(htmlCandidates, alive, {});
         if (alive()) {

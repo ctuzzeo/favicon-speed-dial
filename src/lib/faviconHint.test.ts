@@ -45,4 +45,28 @@ describe("faviconHint", () => {
     localStorage.setItem("fs-favhint:e:https://partial/", JSON.stringify({ url: "x" }));
     expect(readFaviconHint("https://partial/", true)).toBeNull();
   });
+
+  it("expires hints older than the TTL and clears them", () => {
+    const key = "fs-favhint:e:https://stale.example/";
+    const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+    localStorage.setItem(
+      key,
+      JSON.stringify({
+        url: "https://tracker.example/pixel.png",
+        width: 64,
+        savedAt: Date.now() - sevenDaysMs - 1,
+      }),
+    );
+    expect(readFaviconHint("https://stale.example/", true)).toBeNull();
+    expect(localStorage.getItem(key)).toBeNull();
+  });
+
+  it("treats hints with no savedAt (pre-fix data) as expired", () => {
+    const key = "fs-favhint:e:https://legacy.example/";
+    localStorage.setItem(
+      key,
+      JSON.stringify({ url: "https://tracker.example/pixel.png", width: 64 }),
+    );
+    expect(readFaviconHint("https://legacy.example/", true)).toBeNull();
+  });
 });

@@ -16,6 +16,8 @@ import {
   htmlDeclaredIconPicksFromLinkTags,
   inferLargestSizeFromManifestSizes,
   isDiscouragedDdgPngIconUrl,
+  isSameSiteAsPage,
+  isThirdPartyFaviconUrl,
   manifestIconSortWidth,
   mirrorHostnamesForFavicon,
   pickBestFavicon,
@@ -214,6 +216,54 @@ describe("mirrorHostnamesForFavicon", () => {
       "bbc.co.uk",
       "news.bbc.co.uk",
     ]);
+  });
+});
+
+describe("isSameSiteAsPage", () => {
+  it("treats a CDN subdomain of the same registrable domain as same-site", () => {
+    expect(
+      isSameSiteAsPage("https://static.example.com/icon.png", "www.example.com"),
+    ).toBe(true);
+  });
+
+  it("treats a different registrable domain as cross-site", () => {
+    expect(
+      isSameSiteAsPage("https://tracker.example/pixel.png?bookmark=victim", "victim.example"),
+    ).toBe(false);
+  });
+
+  it("treats a different host entirely (e.g. an internal target) as cross-site", () => {
+    expect(
+      isSameSiteAsPage("http://127.0.0.1/admin/reboot", "victim.example"),
+    ).toBe(false);
+  });
+
+  it("handles multi-label public suffixes (co.uk)", () => {
+    expect(
+      isSameSiteAsPage("https://assets.google.co.uk/icon.png", "www.google.co.uk"),
+    ).toBe(true);
+    expect(isSameSiteAsPage("https://evil.co.uk/icon.png", "www.google.co.uk")).toBe(
+      false,
+    );
+  });
+
+  it("returns false for an unparsable URL", () => {
+    expect(isSameSiteAsPage("not a url", "example.com")).toBe(false);
+  });
+});
+
+describe("isThirdPartyFaviconUrl", () => {
+  it("flags the known mirror providers", () => {
+    expect(isThirdPartyFaviconUrl("https://www.google.com/s2/favicons?domain=x")).toBe(
+      true,
+    );
+    expect(isThirdPartyFaviconUrl("https://t2.gstatic.com/faviconV2?x")).toBe(true);
+    expect(isThirdPartyFaviconUrl("https://icons.duckduckgo.com/ip3/x.ico")).toBe(true);
+  });
+
+  it("does not flag first-party or same-site URLs", () => {
+    expect(isThirdPartyFaviconUrl("https://example.com/favicon.ico")).toBe(false);
+    expect(isThirdPartyFaviconUrl("/_favicon/?pageUrl=x")).toBe(false);
   });
 });
 
@@ -479,7 +529,7 @@ describe("getFaviconPickerCandidates", () => {
     expect(urls.some((u) => u.endsWith("/favicon.svg"))).toBe(true);
   });
 
-  it("includes icons declared in page HTML even with external providers off", async () => {
+  it("includes same-site declared icons regardless of the toggle, but gates off-site ones on it", async () => {
     const html =
       "<head>" +
       '<link rel="apple-touch-icon" sizes="180x180" href="/img/brand/touch-180.png">' +
@@ -521,27 +571,32 @@ describe("getFaviconPickerCandidates", () => {
       }),
     );
 
-    const list = await getFaviconPickerCandidates(
+    const off = await getFaviconPickerCandidates(
       "https://declared-icons.example/page",
       { externalFaviconProviders: false },
     );
-    const urls = list.map((o) => o.url);
-    expect(urls).toContain(
+    const offUrls = off.map((o) => o.url);
+    expect(offUrls).toContain(
       "https://declared-icons.example/img/brand/touch-180.png",
     );
-    expect(urls).toContain("https://cdn.example.net/icon.svg");
+    expect(offUrls).not.toContain("https://cdn.example.net/icon.svg");
+
+    const on = await getFaviconPickerCandidates(
+      "https://declared-icons.example/page",
+      { externalFaviconProviders: true },
+    );
+    const offSiteIcon = on.find((o) => o.url === "https://cdn.example.net/icon.svg");
+    expect(offSiteIcon).toBeDefined();
+    expect(offSiteIcon?.thirdParty).toBe(true);
   });
 
-  it("includes web-manifest icons (eBay-style PWA logo not in fixed guesses)", async () => {
+  it("includes same-site web-manifest icons regardless of the toggle, but gates off-site ones on it", async () => {
     const manifest = JSON.stringify({
       icons: [
+        { src: "/app-icons/app-192.png", sizes: "192x192", type: "image/png" },
+        { src: "/app-icons/app-512.png", sizes: "512x512", type: "image/png" },
         {
-          src: "https://cdn.example/app-192.png",
-          sizes: "192x192",
-          type: "image/png",
-        },
-        {
-          src: "https://cdn.example/app-512.png",
+          src: "https://cdn.example/off-site-512.png",
           sizes: "512x512",
           type: "image/png",
         },
@@ -568,13 +623,23 @@ describe("getFaviconPickerCandidates", () => {
       }),
     );
 
-    const list = await getFaviconPickerCandidates("https://pwa-site.example/", {
+    const off = await getFaviconPickerCandidates("https://pwa-site.example/", {
       externalFaviconProviders: false,
     });
-    const urls = list.map((o) => o.url);
-    // Collapsed to the largest manifest icon, and present even with mirrors off.
-    expect(urls).toContain("https://cdn.example/app-512.png");
-    expect(urls).not.toContain("https://cdn.example/app-192.png");
+    const offUrls = off.map((o) => o.url);
+    // Collapsed to the largest same-site manifest icon, present even with providers off.
+    expect(offUrls).toContain("https://pwa-site.example/app-icons/app-512.png");
+    expect(offUrls).not.toContain("https://pwa-site.example/app-icons/app-192.png");
+    // The off-site manifest icon is a different registrable domain, so it's omitted
+    // while opted out.
+    expect(offUrls).not.toContain("https://cdn.example/off-site-512.png");
+
+    const on = await getFaviconPickerCandidates("https://pwa-site.example/", {
+      externalFaviconProviders: true,
+    });
+    const offSitePick = on.find((o) => o.url === "https://cdn.example/off-site-512.png");
+    expect(offSitePick).toBeDefined();
+    expect(offSitePick?.thirdParty).toBe(true);
   });
 
   it("includes registrable apex mirrors for subdomains (PlayStation-style)", async () => {

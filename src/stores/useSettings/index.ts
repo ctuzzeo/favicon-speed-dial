@@ -735,7 +735,10 @@ export const settings = makeAutoObservable({
 
   externalAllowedForUrl(url: string | undefined): boolean {
     if (!url) return false;
-    return Boolean(settings.externalProviderHosts[hostnameForSiteKey(url)]);
+    // Own-property check, not a truthy bracket lookup: externalProviderHosts is a plain
+    // object, so a bookmark hostname that collides with an inherited Object.prototype
+    // member (e.g. "constructor", "__proto__") would otherwise read as opted-in.
+    return Object.hasOwn(settings.externalProviderHosts, hostnameForSiteKey(url));
   },
 
   handleExternalForHost(hostname: string, allowed: boolean) {

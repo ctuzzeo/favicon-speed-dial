@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { dominantColorFromImageData } from "./imageColor";
+import { dominantColorFromImageData, fetchImageBlobBounded } from "./imageColor";
 
 type RGBA = [number, number, number, number];
 
@@ -73,5 +73,112 @@ describe("dominantColorFromImageData", () => {
     expect(r).toBeLessThan(120);
     expect(Math.abs(r - g)).toBeLessThan(16);
     expect(Math.abs(g - b)).toBeLessThan(16);
+  });
+});
+
+function makeStreamResponse(
+  chunks: Uint8Array[],
+  opts?: { ok?: boolean; contentType?: string },
+): Response {
+  let i = 0;
+  const reader = {
+    read: async () => {
+      if (i < chunks.length) return { done: false, value: chunks[i++] };
+      return { done: true, value: undefined };
+    },
+    cancel: async () => {},
+  };
+  return {
+    ok: opts?.ok ?? true,
+    body: { getReader: () => reader },
+    headers: {
+      get: (name: string) =>
+        name.toLowerCase() === "content-type"
+          ? opts?.contentType ?? "image/png"
+          : null,
+    },
+  } as unknown as Response;
+}
+
+describe("fetchImageBlobBounded", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("returns the assembled blob for a small valid image response", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => makeStreamResponse([new Uint8Array([1, 2, 3, 4])])),
+    );
+    const blob = await fetchImageBlobBounded("https://x.example/icon.png", () => true);
+    expect(blob).not.toBeNull();
+    expect(blob!.size).toBe(4);
+    expect(blob!.type).toBe("image/png");
+  });
+
+  it("rejects a non-OK response", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => makeStreamResponse([new Uint8Array([1])], { ok: false })),
+    );
+    const blob = await fetchImageBlobBounded("https://x.example/icon.png", () => true);
+    expect(blob).toBeNull();
+  });
+
+  it("rejects a response whose content-type isn't image/*", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        makeStreamResponse([new Uint8Array([1, 2, 3])], { contentType: "text/plain" }),
+      ),
+    );
+    const blob = await fetchImageBlobBounded("https://x.example/icon.png", () => true);
+    expect(blob).toBeNull();
+  });
+
+  it("cancels and returns null once the byte cap is exceeded", async () => {
+    let cancelled = false;
+    const oversizedChunk = new Uint8Array(9 * 1024 * 1024); // 9 MiB > 8 MiB cap
+    const reader = {
+      read: vi
+        .fn()
+        .mockResolvedValueOnce({ done: false, value: oversizedChunk })
+        .mockResolvedValue({ done: true, value: undefined }),
+      cancel: async () => {
+        cancelled = true;
+      },
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        body: { getReader: () => reader },
+        headers: { get: () => "image/png" },
+      })),
+    );
+    const blob = await fetchImageBlobBounded("https://x.example/huge.png", () => true);
+    expect(blob).toBeNull();
+    expect(cancelled).toBe(true);
+  });
+
+  it("cancels and returns null once alive() goes false mid-stream", async () => {
+    let cancelled = false;
+    const reader = {
+      read: vi.fn(async () => ({ done: false, value: new Uint8Array([1]) })),
+      cancel: async () => {
+        cancelled = true;
+      },
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        body: { getReader: () => reader },
+        headers: { get: () => "image/png" },
+      })),
+    );
+    const blob = await fetchImageBlobBounded("https://x.example/icon.png", () => false);
+    expect(blob).toBeNull();
+    expect(cancelled).toBe(true);
   });
 });

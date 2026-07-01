@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Modal } from "#components/Modal";
 import {
   getFaviconPickerCandidates,
+  isThirdPartyFaviconUrl,
   resolveFaviconForBookmark,
   type FaviconPickerOption,
 } from "#lib/faviconResolve";
@@ -140,7 +141,14 @@ export const FaviconModal = observer(function FaviconModal() {
   // Always offer the dial's current icon first — a manual pick if set, otherwise the
   // auto-resolved one — so what's actually on the dial is always selectable, even when
   // its exact source isn't a generated row (e.g. a provider variant for a redirected host).
-  const currentIcon = currentManual || autoUrl || "";
+  // Skip it when it's a third-party mirror and the toggle is off (e.g. a manual pick made
+  // while providers were on, now stale) — showing it would fetch/render that URL despite
+  // the opt-out.
+  const currentIconRaw = currentManual || autoUrl || "";
+  const currentIcon =
+    currentIconRaw && (externalOn || !isThirdPartyFaviconUrl(currentIconRaw))
+      ? currentIconRaw
+      : "";
   const displayCandidates =
     currentIcon && !visibleCandidates.some((c) => c.url === currentIcon)
       ? [{ name: "Current icon", url: currentIcon }, ...visibleCandidates]

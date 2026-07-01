@@ -96,7 +96,7 @@ export const BookmarkModal = observer(function BookmarkModal() {
         iconUrl = pick?.url;
       }
       if (cancelled || !iconUrl) return;
-      const color = await getImageDominantColor(iconUrl);
+      const color = await getImageDominantColor(iconUrl, () => !cancelled);
       if (!cancelled && color) setIconColor(color);
     })();
     return () => {
