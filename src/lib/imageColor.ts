@@ -98,6 +98,9 @@ function loadImageWithTimeout(
     const timer = setTimeout(() => {
       img.onload = null;
       img.onerror = null;
+      // Detaching the handlers above stops us reacting to this load, but the browser
+      // would otherwise keep downloading/decoding it. Clearing src actually aborts it.
+      img.src = "";
       reject(new Error("image load timed out"));
     }, timeoutMs);
     img.onload = () => {

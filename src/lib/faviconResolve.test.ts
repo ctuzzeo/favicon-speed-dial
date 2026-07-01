@@ -220,10 +220,27 @@ describe("mirrorHostnamesForFavicon", () => {
 });
 
 describe("isSameSiteAsPage", () => {
-  it("treats a CDN subdomain of the same registrable domain as same-site", () => {
+  it("matches an exact host", () => {
+    expect(
+      isSameSiteAsPage("https://victim.example/assets/icon.png", "victim.example"),
+    ).toBe(true);
+  });
+
+  it("treats a leading www. as equivalent, in either direction", () => {
+    expect(isSameSiteAsPage("https://www.example.com/icon.png", "example.com")).toBe(
+      true,
+    );
+    expect(isSameSiteAsPage("https://example.com/icon.png", "www.example.com")).toBe(
+      true,
+    );
+  });
+
+  it("fails closed on a different subdomain, even of the same registrable domain", () => {
+    // A CDN subdomain of the bookmark's own company is NOT treated as same-site: telling
+    // that apart from two unrelated sibling tenants needs a real public-suffix list.
     expect(
       isSameSiteAsPage("https://static.example.com/icon.png", "www.example.com"),
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it("treats a different registrable domain as cross-site", () => {
@@ -238,15 +255,6 @@ describe("isSameSiteAsPage", () => {
     ).toBe(false);
   });
 
-  it("handles multi-label public suffixes (co.uk)", () => {
-    expect(
-      isSameSiteAsPage("https://assets.google.co.uk/icon.png", "www.google.co.uk"),
-    ).toBe(true);
-    expect(isSameSiteAsPage("https://evil.co.uk/icon.png", "www.google.co.uk")).toBe(
-      false,
-    );
-  });
-
   it("returns false for an unparsable URL", () => {
     expect(isSameSiteAsPage("not a url", "example.com")).toBe(false);
   });
@@ -257,6 +265,12 @@ describe("isSameSiteAsPage", () => {
     ).toBe(false);
     expect(
       isSameSiteAsPage("https://evil.vercel.app/icon.png", "my-app.vercel.app"),
+    ).toBe(false);
+  });
+
+  it("does not collapse sibling tenants on an un-enumerated multi-label ccTLD (co.il)", () => {
+    expect(
+      isSameSiteAsPage("https://tracker.co.il/icon.png", "victim.co.il"),
     ).toBe(false);
   });
 

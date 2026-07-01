@@ -200,59 +200,28 @@ function naiveRegistrableHost(hostname: string): string {
 }
 
 /**
- * Multi-tenant hosting apexes (GitHub Pages, Vercel, Netlify, …) where sibling
- * subdomains belong to unrelated tenants, not one site's own CDN. `naiveRegistrableHost`
- * would otherwise collapse `attacker.github.io` and `victim.github.io` to the same
- * `github.io` "site". Not a full public-suffix list — covers the common hosts a
- * bookmark is realistically on; anything landing on one of these apexes falls back to
- * requiring an exact hostname match in {@link isSameSiteAsPage}.
- */
-const SHARED_HOSTING_APEXES = new Set([
-  "github.io",
-  "gitlab.io",
-  "bitbucket.io",
-  "herokuapp.com",
-  "vercel.app",
-  "now.sh",
-  "netlify.app",
-  "pages.dev",
-  "workers.dev",
-  "web.app",
-  "firebaseapp.com",
-  "appspot.com",
-  "blogspot.com",
-  "wordpress.com",
-  "weebly.com",
-  "wixsite.com",
-  "glitch.me",
-  "repl.co",
-  "replit.dev",
-  "surge.sh",
-  "onrender.com",
-  "railway.app",
-  "fly.dev",
-  "deno.dev",
-  "azurewebsites.net",
-  "azurestaticapps.net",
-]);
-
-/**
- * True when `url`'s host is the same site as `pageHostname` (exact match, or a
- * subdomain sharing its registrable domain — e.g. a CDN subdomain of the same site).
- * Used to gate manifest / declared `<link>` icon hrefs that point off-site: those are a
- * different origin's resource, not "the page's own icon", so they're held to the same
- * `externalFaviconProviders` opt-in as mirror providers. Apexes in
- * {@link SHARED_HOSTING_APEXES} never count as a match on their own — those are shared
- * multi-tenant hosting, not one owner's domain, so only an exact host match counts.
+ * True when `url`'s host is the same site as `pageHostname`: an exact hostname match, or
+ * one that differs only by a leading `www.`. Used to gate manifest / declared `<link>`
+ * icon hrefs that point elsewhere: those are a different origin's resource, not "the
+ * page's own icon", so they're held to the same `externalFaviconProviders` opt-in as
+ * mirror providers.
+ *
+ * Deliberately fails closed rather than collapsing to a registrable domain: an earlier
+ * version compared `naiveRegistrableHost` results (to allow e.g. a CDN subdomain of the
+ * same company), but review found that heuristic collapses unrelated sibling tenants
+ * together on any suffix it doesn't special-case — both single-label shared-hosting
+ * apexes (`attacker.github.io` / `victim.github.io` → `github.io`) and un-enumerated
+ * multi-label ccTLDs (`tracker.co.il` / `victim.co.il` → `co.il`, since `co.il` isn't in
+ * {@link MULTI_LABEL_PUBLIC_SUFFIX2}). Getting that right in general needs a real,
+ * maintained public-suffix list; until this uses one, an exact-host check can't be
+ * bypassed by any suffix, known or not, at the cost of not recognizing a legitimate CDN
+ * subdomain as first-party.
  */
 export function isSameSiteAsPage(url: string, pageHostname: string): boolean {
   try {
-    const candidateHost = new URL(url).hostname.toLowerCase();
-    const pageHost = pageHostname.toLowerCase();
-    if (candidateHost === pageHost) return true;
-    const apex = naiveRegistrableHost(pageHost);
-    if (SHARED_HOSTING_APEXES.has(apex)) return false;
-    return naiveRegistrableHost(candidateHost) === apex;
+    const candidateHost = new URL(url).hostname.toLowerCase().replace(/^www\./, "");
+    const pageHost = pageHostname.toLowerCase().replace(/^www\./, "");
+    return candidateHost === pageHost;
   } catch {
     return false;
   }

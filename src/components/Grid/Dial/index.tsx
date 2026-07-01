@@ -9,6 +9,7 @@ import {
   getChromeFastHqFaviconUrl,
   getPlaceholderFaviconUrl,
   isDiscouragedDdgPngIconUrl,
+  isSameSiteAsPage,
   parseBookmarkUrl,
   resolveFaviconForBookmark,
 } from "#lib/faviconResolve";
@@ -177,7 +178,15 @@ const Favicon = observer(function Favicon({
     }
 
     const host = parsedUrl.hostname;
-    const manual = settings.manualFavicons?.[host];
+    const rawManual = settings.manualFavicons?.[host];
+    // An off-site manual pick (e.g. a provider variant saved while providers were on)
+    // is only trusted unconditionally while it stays same-site; otherwise it needs the
+    // per-site opt-in like any other off-site source, so it falls through to normal
+    // automatic resolution below instead of being rendered regardless of the toggle.
+    const manual =
+      rawManual && (externalFav || isSameSiteAsPage(rawManual, host))
+        ? rawManual
+        : undefined;
     if (manual && !isDiscouragedDdgPngIconUrl(manual)) {
       probeGen.current += 1;
       const myGen = probeGen.current;
