@@ -113,20 +113,40 @@ function loadImageWithTimeout(
 }
 
 /**
- * Fetch a blob for `src` as a stream capped at `ICON_FETCH_MAX_BYTES`, bailing out (and
+ * Result of the bounded fetch below. `rejected` means the fetch itself succeeded but was
+ * deliberately declined by a size/type policy — the caller must NOT fall back to an
+ * unbounded `<img>` load for that, since that would just re-download/decode the same
+ * oversized or wrong-type response the cap exists to stop. `network-error` means the
+ * fetch failed for an unrelated reason (e.g. an odd CORS block) and it's safe to retry
+ * via a plain `<img>` load, same as the pre-existing fallback behavior.
+ */
+export type BoundedFetchResult =
+  | { kind: "blob"; blob: Blob }
+  | { kind: "rejected" }
+  | { kind: "network-error" };
+
+/**
+ * Fetch a blob for `url` as a stream capped at `ICON_FETCH_MAX_BYTES`, bailing out (and
  * cancelling the stream) if the response isn't `image/*` or the cap is exceeded, or if
  * `alive()` goes false mid-read (e.g. the editor was closed).
  */
 export async function fetchImageBlobBounded(
   url: string,
   alive: () => boolean,
-): Promise<Blob | null> {
-  const res = await fetch(url, {
-    credentials: "omit",
-    signal: AbortSignal.timeout(ICON_FETCH_TIMEOUT_MS),
-  });
+): Promise<BoundedFetchResult> {
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      credentials: "omit",
+      signal: AbortSignal.timeout(ICON_FETCH_TIMEOUT_MS),
+    });
+  } catch {
+    return { kind: "network-error" };
+  }
   const contentType = res.headers.get("content-type") ?? "";
-  if (!res.ok || !res.body || !/^image\//i.test(contentType)) return null;
+  if (!res.ok || !res.body || !/^image\//i.test(contentType)) {
+    return { kind: "rejected" };
+  }
 
   const reader = res.body.getReader();
   const chunks: Uint8Array[] = [];
@@ -135,21 +155,21 @@ export async function fetchImageBlobBounded(
     while (true) {
       if (!alive()) {
         await reader.cancel();
-        return null;
+        return { kind: "rejected" };
       }
       const { done, value } = await reader.read();
       if (done) break;
       total += value.byteLength;
       if (total > ICON_FETCH_MAX_BYTES) {
         await reader.cancel();
-        return null;
+        return { kind: "rejected" };
       }
       chunks.push(value);
     }
   } catch {
-    return null;
+    return { kind: "network-error" };
   }
-  return new Blob(chunks as BlobPart[], { type: contentType });
+  return { kind: "blob", blob: new Blob(chunks as BlobPart[], { type: contentType }) };
 }
 
 export async function getImageDominantColor(
@@ -162,16 +182,15 @@ export async function getImageDominantColor(
     let src = url;
     let useCors = true;
     // Fetch as a blob first (the extension has host permissions) so the canvas isn't
-    // tainted by a cross-origin favicon; fall back to a CORS <img> load if that fails.
-    try {
-      const blob = await fetchImageBlobBounded(url, alive);
-      if (blob) {
-        src = URL.createObjectURL(blob);
-        revoke = () => URL.revokeObjectURL(src);
-        useCors = false;
-      }
-    } catch {
-      /* fall through to a direct load */
+    // tainted by a cross-origin favicon; fall back to a CORS <img> load only on a
+    // network-level failure — a deliberate size/type rejection must not fall through to
+    // an unbounded <img> load, or the cap above is pointless.
+    const bounded = await fetchImageBlobBounded(url, alive);
+    if (bounded.kind === "rejected") return null;
+    if (bounded.kind === "blob") {
+      src = URL.createObjectURL(bounded.blob);
+      revoke = () => URL.revokeObjectURL(src);
+      useCors = false;
     }
 
     if (!alive()) return null;

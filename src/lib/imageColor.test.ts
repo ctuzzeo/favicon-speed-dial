@@ -110,33 +110,34 @@ describe("fetchImageBlobBounded", () => {
       "fetch",
       vi.fn(async () => makeStreamResponse([new Uint8Array([1, 2, 3, 4])])),
     );
-    const blob = await fetchImageBlobBounded("https://x.example/icon.png", () => true);
-    expect(blob).not.toBeNull();
-    expect(blob!.size).toBe(4);
-    expect(blob!.type).toBe("image/png");
+    const result = await fetchImageBlobBounded("https://x.example/icon.png", () => true);
+    expect(result.kind).toBe("blob");
+    if (result.kind !== "blob") throw new Error("expected a blob result");
+    expect(result.blob.size).toBe(4);
+    expect(result.blob.type).toBe("image/png");
   });
 
-  it("rejects a non-OK response", async () => {
+  it("rejects (not a network error) a non-OK response", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => makeStreamResponse([new Uint8Array([1])], { ok: false })),
     );
-    const blob = await fetchImageBlobBounded("https://x.example/icon.png", () => true);
-    expect(blob).toBeNull();
+    const result = await fetchImageBlobBounded("https://x.example/icon.png", () => true);
+    expect(result.kind).toBe("rejected");
   });
 
-  it("rejects a response whose content-type isn't image/*", async () => {
+  it("rejects (not a network error) a response whose content-type isn't image/*", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () =>
         makeStreamResponse([new Uint8Array([1, 2, 3])], { contentType: "text/plain" }),
       ),
     );
-    const blob = await fetchImageBlobBounded("https://x.example/icon.png", () => true);
-    expect(blob).toBeNull();
+    const result = await fetchImageBlobBounded("https://x.example/icon.png", () => true);
+    expect(result.kind).toBe("rejected");
   });
 
-  it("cancels and returns null once the byte cap is exceeded", async () => {
+  it("cancels and rejects (not a network error) once the byte cap is exceeded", async () => {
     let cancelled = false;
     const oversizedChunk = new Uint8Array(9 * 1024 * 1024); // 9 MiB > 8 MiB cap
     const reader = {
@@ -156,12 +157,12 @@ describe("fetchImageBlobBounded", () => {
         headers: { get: () => "image/png" },
       })),
     );
-    const blob = await fetchImageBlobBounded("https://x.example/huge.png", () => true);
-    expect(blob).toBeNull();
+    const result = await fetchImageBlobBounded("https://x.example/huge.png", () => true);
+    expect(result.kind).toBe("rejected");
     expect(cancelled).toBe(true);
   });
 
-  it("cancels and returns null once alive() goes false mid-stream", async () => {
+  it("cancels and rejects once alive() goes false mid-stream", async () => {
     let cancelled = false;
     const reader = {
       read: vi.fn(async () => ({ done: false, value: new Uint8Array([1]) })),
@@ -177,8 +178,38 @@ describe("fetchImageBlobBounded", () => {
         headers: { get: () => "image/png" },
       })),
     );
-    const blob = await fetchImageBlobBounded("https://x.example/icon.png", () => false);
-    expect(blob).toBeNull();
+    const result = await fetchImageBlobBounded("https://x.example/icon.png", () => false);
+    expect(result.kind).toBe("rejected");
     expect(cancelled).toBe(true);
+  });
+
+  it("reports a network-error (not a policy rejection) when fetch itself throws", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new Error("network down");
+      }),
+    );
+    const result = await fetchImageBlobBounded("https://x.example/icon.png", () => true);
+    expect(result.kind).toBe("network-error");
+  });
+
+  it("reports a network-error if the stream itself errors mid-read", async () => {
+    const reader = {
+      read: vi.fn(async () => {
+        throw new Error("stream broke");
+      }),
+      cancel: async () => {},
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        body: { getReader: () => reader },
+        headers: { get: () => "image/png" },
+      })),
+    );
+    const result = await fetchImageBlobBounded("https://x.example/icon.png", () => true);
+    expect(result.kind).toBe("network-error");
   });
 });

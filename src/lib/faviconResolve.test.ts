@@ -250,6 +250,21 @@ describe("isSameSiteAsPage", () => {
   it("returns false for an unparsable URL", () => {
     expect(isSameSiteAsPage("not a url", "example.com")).toBe(false);
   });
+
+  it("does not collapse sibling tenants on a shared multi-tenant hosting apex", () => {
+    expect(
+      isSameSiteAsPage("https://attacker.github.io/icon.png", "victim.github.io"),
+    ).toBe(false);
+    expect(
+      isSameSiteAsPage("https://evil.vercel.app/icon.png", "my-app.vercel.app"),
+    ).toBe(false);
+  });
+
+  it("still matches an exact host on a shared hosting apex", () => {
+    expect(
+      isSameSiteAsPage("https://victim.github.io/assets/icon.png", "victim.github.io"),
+    ).toBe(true);
+  });
 });
 
 describe("isThirdPartyFaviconUrl", () => {
