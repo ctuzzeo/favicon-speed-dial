@@ -6,10 +6,10 @@ import { dialColors } from "#lib/dialColors";
 import { readFaviconHint, writeFaviconHint } from "#lib/faviconHint";
 import {
   FAVICON_MIN_QUALITY_PX,
+  gatedManualFavicon,
   getChromeFastHqFaviconUrl,
   getPlaceholderFaviconUrl,
   isDiscouragedDdgPngIconUrl,
-  isSameSiteAsPage,
   parseBookmarkUrl,
   resolveFaviconForBookmark,
 } from "#lib/faviconResolve";
@@ -177,15 +177,15 @@ const Favicon = observer(function Favicon({
     }
 
     const host = parsedUrl.hostname;
-    const rawManual = readOwn(settings.manualFavicons, host);
-    // An off-site manual pick (e.g. a provider variant saved while providers were on)
-    // is only trusted unconditionally while it stays same-site; otherwise it needs the
-    // per-site opt-in like any other off-site source, so it falls through to normal
-    // automatic resolution below instead of being rendered regardless of the toggle.
-    const manual =
-      rawManual && (externalFav || isSameSiteAsPage(rawManual, host))
-        ? rawManual
-        : undefined;
+    // A saved off-site manual pick (e.g. a provider variant chosen while providers were
+    // on) needs the per-site opt-in; a same-site one is always used. Otherwise fall
+    // through to normal automatic resolution below rather than render it regardless of
+    // the toggle. Shared with the bookmark-editor colour effect via gatedManualFavicon.
+    const manual = gatedManualFavicon(
+      readOwn(settings.manualFavicons, host),
+      host,
+      externalFav,
+    );
     if (manual && !isDiscouragedDdgPngIconUrl(manual)) {
       probeGen.current += 1;
       const myGen = probeGen.current;

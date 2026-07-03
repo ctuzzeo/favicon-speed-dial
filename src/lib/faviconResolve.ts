@@ -285,6 +285,25 @@ export function isThirdPartyFaviconUrl(url: string): boolean {
 }
 
 /**
+ * The saved manual favicon to actually use for `host`, honoring the per-site third-party
+ * opt-out. An off-site (cross-host) manual pick — e.g. a provider/CDN URL chosen while
+ * providers were enabled, then left behind when the toggle was turned off — is only used
+ * when `externalFav` is true; a same-site (or root-relative, extension-origin) pick is
+ * always used. Returns `undefined` to fall through to automatic resolution. Shared by the
+ * dial and the bookmark-editor colour effect so both honor the opt-out identically. (The
+ * favicon picker uses a stricter gate — it also blocks a mirror on its own domain — since
+ * it's deciding what to *display* as a contactable row.)
+ */
+export function gatedManualFavicon(
+  rawManual: string | undefined,
+  host: string,
+  externalFav: boolean,
+): string | undefined {
+  if (!rawManual) return undefined;
+  return externalFav || isSameSiteAsPage(rawManual, host) ? rawManual : undefined;
+}
+
+/**
  * DuckDuckGo’s `ip3/…/*.png` endpoint often returns a generic placeholder bitmap.
  * We dropped it from candidates; this guards old caches / manual picks / manifests.
  */

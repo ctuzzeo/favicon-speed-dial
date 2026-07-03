@@ -11,7 +11,10 @@ import { CaretDown } from "#components/icons/CaretDown.tsx";
 import { Modal } from "#components/Modal";
 import { Switch } from "#components/SettingsContent/Switch";
 import { dialColors } from "#lib/dialColors";
-import { resolveFaviconForBookmark } from "#lib/faviconResolve";
+import {
+  gatedManualFavicon,
+  resolveFaviconForBookmark,
+} from "#lib/faviconResolve";
 import { getImageDominantColor } from "#lib/imageColor";
 import { hostnameForSiteKey } from "#lib/syncKeys";
 import { bookmarks } from "#stores/useBookmarks";
@@ -19,6 +22,7 @@ import { colorPicker } from "#stores/useColorPicker";
 import { modals } from "#stores/useModals";
 import { settings } from "#stores/useSettings";
 import { getLinkName } from "#utils/filter";
+import { readOwn } from "#utils/readOwn";
 
 import "./styles.css";
 
@@ -88,10 +92,19 @@ export const BookmarkModal = observer(function BookmarkModal() {
     let cancelled = false;
     void (async () => {
       const host = hostnameForSiteKey(url);
-      let iconUrl = host ? settings.manualFavicons?.[host] : undefined;
+      const externalFav = settings.externalAllowedForUrl(url);
+      // Same gate as the dial: a saved off-site manual favicon is only used when the
+      // per-site opt-in is on, so opening the editor doesn't fetch an off-site icon
+      // (leaking IP/timing) despite the toggle being off. `readOwn` keeps the lookup
+      // prototype-safe. Falls through to automatic resolution when the pick is gated out.
+      let iconUrl = gatedManualFavicon(
+        readOwn(settings.manualFavicons, host),
+        host,
+        externalFav,
+      );
       if (!iconUrl) {
         const pick = await resolveFaviconForBookmark(url, () => !cancelled, {
-          externalFaviconProviders: settings.externalAllowedForUrl(url),
+          externalFaviconProviders: externalFav,
         });
         iconUrl = pick?.url;
       }

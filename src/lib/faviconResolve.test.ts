@@ -10,6 +10,7 @@ import {
 
 import {
   FAVICON_MIN_QUALITY_PX,
+  gatedManualFavicon,
   getChromeFastHqFaviconUrl,
   getFaviconPickerCandidates,
   getPlaceholderFaviconUrl,
@@ -327,6 +328,44 @@ describe("isThirdPartyFaviconUrl", () => {
   it("does not flag first-party or same-site URLs", () => {
     expect(isThirdPartyFaviconUrl("https://example.com/favicon.ico")).toBe(false);
     expect(isThirdPartyFaviconUrl("/_favicon/?pageUrl=x")).toBe(false);
+  });
+});
+
+describe("gatedManualFavicon", () => {
+  it("returns undefined when there is no saved manual favicon", () => {
+    expect(gatedManualFavicon(undefined, "example.com", false)).toBeUndefined();
+    expect(gatedManualFavicon("", "example.com", true)).toBeUndefined();
+  });
+
+  it("uses a same-site manual pick regardless of the opt-in", () => {
+    expect(
+      gatedManualFavicon("https://example.com/icon.png", "example.com", false),
+    ).toBe("https://example.com/icon.png");
+    // Chrome's root-relative native favicon resolves to our own origin → first-party.
+    expect(gatedManualFavicon("/_favicon/?pageUrl=x", "example.com", false)).toBe(
+      "/_favicon/?pageUrl=x",
+    );
+  });
+
+  it("gates OUT an off-site manual pick when the per-site opt-in is off", () => {
+    // The core F8 property: a stale off-site/provider URL must NOT be returned (and thus
+    // not fetched) when third-party providers are disabled for the site.
+    expect(
+      gatedManualFavicon(
+        "https://icons.duckduckgo.com/ip3/example.com.ico",
+        "example.com",
+        false,
+      ),
+    ).toBeUndefined();
+    expect(
+      gatedManualFavicon("https://tracker.example/pixel.png", "example.com", false),
+    ).toBeUndefined();
+  });
+
+  it("allows an off-site manual pick once the per-site opt-in is on", () => {
+    expect(
+      gatedManualFavicon("https://tracker.example/pixel.png", "example.com", true),
+    ).toBe("https://tracker.example/pixel.png");
   });
 });
 
