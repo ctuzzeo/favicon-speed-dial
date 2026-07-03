@@ -88,6 +88,16 @@ npm test && npm run build:chrome
 
 before considering the task done, so the unpacked `dist-chrome` build matches what you ship and tests stay green.
 
+### Agent workflow (adversarial review before pushing)
+
+Before pushing a branch or opening/updating a pull request, spin up a **separate adversarial reviewer sub-agent** over the diff (`git diff main...HEAD`) and act on what it finds. Prompt it to be skeptical and concrete — hunt for real defects, not rubber-stamp — with emphasis on:
+
+- security/privacy regressions (this extension has broad host permissions; favicon resolution is attacker-reachable via bookmarked pages),
+- correctness edge cases and off-by-one/opt-out bypasses,
+- test gaps (does a new test actually assert the security property, or would it stay green if the guard were removed?).
+
+Fix confirmed findings, re-run `npm test && npm run build:chrome`, and only then push. This is a **pre-push self-check that runs in-loop** — it complements, and does not replace, any independent external PR review (a fresh reviewer with its own context still catches things a same-model sub-agent shares blind spots on).
+
 ## Code Conventions
 
 - Use exports from random-color-library where applicable for color utilities
