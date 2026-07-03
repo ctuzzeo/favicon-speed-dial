@@ -217,13 +217,30 @@ function naiveRegistrableHost(hostname: string): string {
  * bypassed by any suffix, known or not, at the cost of not recognizing a legitimate CDN
  * subdomain as first-party.
  *
- * A root-relative URL (one leading slash, e.g. Chrome's own `/_favicon/?pageUrl=…`) is
- * treated as first-party: it can only ever resolve against the extension page's own
- * origin, so it never triggers an off-site fetch. `//host/…` (protocol-relative → a real
- * remote host) and anything else that isn't an absolute same-host URL fail closed.
+ * A root-relative URL (e.g. Chrome's own `/_favicon/?pageUrl=…`) is treated as first-party
+ * only when it *actually* resolves against the extension page's own origin. We resolve it
+ * against a sentinel origin and compare rather than string-sniffing for a leading slash:
+ * on special (http/https) schemes the WHATWG URL parser normalizes `\` to `/` and strips
+ * tab/CR/LF before parsing, so `/\evil.com`, `/<TAB>/evil.com`, `/<CRLF>//evil.com` etc.
+ * all resolve to a *remote* authority despite starting with a single slash. A naive
+ * `startsWith("/") && !startsWith("//")` check trusts those and fails open; resolving
+ * against the sentinel closes the whole authority-confusion class (including `//host`) at
+ * once. Anything that isn't an absolute same-host URL, or a relative URL resolving to our
+ * own origin, fails closed.
  */
+const SAME_SITE_SENTINEL_ORIGIN = "https://speed-dial.invalid";
+
 export function isSameSiteAsPage(url: string, pageHostname: string): boolean {
-  if (url.startsWith("/") && !url.startsWith("//")) return true;
+  if (url.startsWith("/")) {
+    try {
+      return (
+        new URL(url, `${SAME_SITE_SENTINEL_ORIGIN}/`).origin ===
+        SAME_SITE_SENTINEL_ORIGIN
+      );
+    } catch {
+      return false;
+    }
+  }
   try {
     const candidateHost = new URL(url).hostname.toLowerCase().replace(/^www\./, "");
     const pageHost = pageHostname.toLowerCase().replace(/^www\./, "");

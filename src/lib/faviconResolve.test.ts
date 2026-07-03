@@ -295,6 +295,24 @@ describe("isSameSiteAsPage", () => {
   it("does NOT treat a protocol-relative //host URL as first-party", () => {
     expect(isSameSiteAsPage("//evil.example/pixel.png", "victim.example")).toBe(false);
   });
+
+  it("does NOT treat authority-confusion root-relative URLs as first-party", () => {
+    // The WHATWG parser normalizes `\` to `/` and strips tab/CR/LF on http(s) schemes, so
+    // each of these resolves to a *remote* host despite the single leading slash. A naive
+    // `startsWith("/") && !startsWith("//")` guard would wrongly trust them.
+    const backslash = "/" + String.fromCharCode(92) + "evil.com/icon.png"; // /\evil.com/...
+    expect(isSameSiteAsPage(backslash, "victim.example")).toBe(false);
+    expect(isSameSiteAsPage("/\t/evil.com", "victim.example")).toBe(false);
+    expect(isSameSiteAsPage("/\r\n//evil.com", "victim.example")).toBe(false);
+  });
+
+  it("still treats a genuine root-relative path as first-party", () => {
+    // Regression guard: the authority-confusion fix must not reject the legit case.
+    expect(isSameSiteAsPage("/favicon.ico", "anything.example")).toBe(true);
+    expect(
+      isSameSiteAsPage("/assets/icons/favicon-32.png?v=2", "example.com"),
+    ).toBe(true);
+  });
 });
 
 describe("isThirdPartyFaviconUrl", () => {
