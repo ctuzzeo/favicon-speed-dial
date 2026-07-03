@@ -1444,10 +1444,11 @@ export async function getFaviconPickerCandidates(
   const fixedOptions = buildPickerOptionsForPage(parsed, pageUrl, external);
 
   // Add the web-manifest + declared <link> icons the automatic resolver uses (collapsed
-  // to the largest of each type). A same-registrable-site icon is first-party and always
-  // shown; an off-site one (e.g. a CDN on a different domain) is tagged third-party —
-  // same as mirror providers — and only included when third-party providers are allowed,
-  // so the per-site toggle governs it consistently everywhere.
+  // to the largest of each type). A same-host icon is first-party and always shown; an
+  // off-site one (a different host — including a subdomain, since `isSameSiteAsPage`
+  // matches the host exactly) is tagged third-party like the mirror providers and only
+  // included when third-party providers are allowed, so the per-site toggle governs it
+  // consistently everywhere.
   const [manifestPicks, declaredPicks] = await Promise.all([
     fetchManifestIconCandidates(parsed.origin, () => true),
     gatherHtmlDeclaredIconPicks(pageUrl, () => true),
