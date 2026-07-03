@@ -7,6 +7,7 @@ import { bookmarks } from "#stores/useBookmarks";
 import { contextMenu } from "#stores/useContextMenu";
 import { modals } from "#stores/useModals";
 import { settings } from "#stores/useSettings";
+import { readOwn } from "#utils/readOwn";
 
 import "./styles.css";
 
@@ -239,12 +240,13 @@ export const ContextMenu = observer(function ContextMenu() {
               Select favicon
             </button>
           </li>
-          {settings.manualFavicons[
+          {readOwn(
+            settings.manualFavicons,
             new URL(
               contextMenu.focusAfterClosed?.getAttribute("href") || "",
               window.location.href,
-            ).hostname
-          ] && (
+            ).hostname,
+          ) && (
             <li>
               <button
                 role="menuitem"
