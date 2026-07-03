@@ -4,12 +4,15 @@ import { useEffect, useState } from "react";
 import { Modal } from "#components/Modal";
 import {
   getFaviconPickerCandidates,
+  isSameSiteAsPage,
+  isThirdPartyFaviconUrl,
   resolveFaviconForBookmark,
   type FaviconPickerOption,
 } from "#lib/faviconResolve";
 import { bookmarks } from "#stores/useBookmarks";
 import { modals } from "#stores/useModals";
 import { settings } from "#stores/useSettings";
+import { readOwn } from "#utils/readOwn";
 
 import "./styles.css";
 
@@ -128,9 +131,7 @@ export const FaviconModal = observer(function FaviconModal() {
   } catch {
     /* invalid bookmark URL */
   }
-  const currentManual = currentHostname
-    ? settings.manualFavicons?.[currentHostname]
-    : undefined;
+  const currentManual = readOwn(settings.manualFavicons, currentHostname);
   // Show third-party rows only when the per-site toggle is on (so they're contacted only
   // when allowed); first-party rows always show. loadedUrls is preserved across toggles,
   // so already-loaded icons don't vanish when flipping it off.
@@ -140,7 +141,16 @@ export const FaviconModal = observer(function FaviconModal() {
   // Always offer the dial's current icon first — a manual pick if set, otherwise the
   // auto-resolved one — so what's actually on the dial is always selectable, even when
   // its exact source isn't a generated row (e.g. a provider variant for a redirected host).
-  const currentIcon = currentManual || autoUrl || "";
+  // Skip it when the toggle is off and it's either a known mirror provider or any other
+  // off-site URL (e.g. a manual pick of a declared/manifest CDN icon made while providers
+  // were on, now stale) — showing it would fetch/render that URL despite the opt-out.
+  const currentIconRaw = currentManual || autoUrl || "";
+  const currentIconNeedsOptIn =
+    currentIconRaw !== "" &&
+    (isThirdPartyFaviconUrl(currentIconRaw) ||
+      !isSameSiteAsPage(currentIconRaw, currentHostname));
+  const currentIcon =
+    currentIconRaw && (externalOn || !currentIconNeedsOptIn) ? currentIconRaw : "";
   const displayCandidates =
     currentIcon && !visibleCandidates.some((c) => c.url === currentIcon)
       ? [{ name: "Current icon", url: currentIcon }, ...visibleCandidates]

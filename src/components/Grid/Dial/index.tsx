@@ -6,6 +6,7 @@ import { dialColors } from "#lib/dialColors";
 import { readFaviconHint, writeFaviconHint } from "#lib/faviconHint";
 import {
   FAVICON_MIN_QUALITY_PX,
+  gatedManualFavicon,
   getChromeFastHqFaviconUrl,
   getPlaceholderFaviconUrl,
   isDiscouragedDdgPngIconUrl,
@@ -15,6 +16,7 @@ import {
 import { hostnameForSiteKey } from "#lib/syncKeys";
 import { contextMenu } from "#stores/useContextMenu";
 import { settings } from "#stores/useSettings";
+import { readOwn } from "#utils/readOwn";
 
 import "./styles.css";
 
@@ -153,9 +155,7 @@ const Favicon = observer(function Favicon({
   const probeGen = useRef(0);
   const parsed = url ? parseBookmarkUrl(url) : null;
   const hostname = parsed?.hostname ?? "";
-  const manualFaviconOverride = hostname
-    ? settings.manualFavicons?.[hostname]
-    : undefined;
+  const manualFaviconOverride = readOwn(settings.manualFavicons, hostname);
   const externalFav = settings.externalAllowedForUrl(url);
 
   const placeholderUrl = url ? getPlaceholderFaviconUrl(url, externalFav) : null;
@@ -177,7 +177,15 @@ const Favicon = observer(function Favicon({
     }
 
     const host = parsedUrl.hostname;
-    const manual = settings.manualFavicons?.[host];
+    // A saved off-site manual pick (e.g. a provider variant chosen while providers were
+    // on) needs the per-site opt-in; a same-site one is always used. Otherwise fall
+    // through to normal automatic resolution below rather than render it regardless of
+    // the toggle. Shared with the bookmark-editor colour effect via gatedManualFavicon.
+    const manual = gatedManualFavicon(
+      readOwn(settings.manualFavicons, host),
+      host,
+      externalFav,
+    );
     if (manual && !isDiscouragedDdgPngIconUrl(manual)) {
       probeGen.current += 1;
       const myGen = probeGen.current;

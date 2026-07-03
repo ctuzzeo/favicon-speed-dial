@@ -10,12 +10,15 @@ import {
 
 import {
   FAVICON_MIN_QUALITY_PX,
+  gatedManualFavicon,
   getChromeFastHqFaviconUrl,
   getFaviconPickerCandidates,
   getPlaceholderFaviconUrl,
   htmlDeclaredIconPicksFromLinkTags,
   inferLargestSizeFromManifestSizes,
   isDiscouragedDdgPngIconUrl,
+  isSameSiteAsPage,
+  isThirdPartyFaviconUrl,
   manifestIconSortWidth,
   mirrorHostnamesForFavicon,
   pickBestFavicon,
@@ -214,6 +217,155 @@ describe("mirrorHostnamesForFavicon", () => {
       "bbc.co.uk",
       "news.bbc.co.uk",
     ]);
+  });
+});
+
+describe("isSameSiteAsPage", () => {
+  it("matches an exact host", () => {
+    expect(
+      isSameSiteAsPage("https://victim.example/assets/icon.png", "victim.example"),
+    ).toBe(true);
+  });
+
+  it("treats a leading www. as equivalent, in either direction", () => {
+    expect(isSameSiteAsPage("https://www.example.com/icon.png", "example.com")).toBe(
+      true,
+    );
+    expect(isSameSiteAsPage("https://example.com/icon.png", "www.example.com")).toBe(
+      true,
+    );
+  });
+
+  it("fails closed on a different subdomain, even of the same registrable domain", () => {
+    // A CDN subdomain of the bookmark's own company is NOT treated as same-site: telling
+    // that apart from two unrelated sibling tenants needs a real public-suffix list.
+    expect(
+      isSameSiteAsPage("https://static.example.com/icon.png", "www.example.com"),
+    ).toBe(false);
+  });
+
+  it("treats a different registrable domain as cross-site", () => {
+    expect(
+      isSameSiteAsPage("https://tracker.example/pixel.png?bookmark=victim", "victim.example"),
+    ).toBe(false);
+  });
+
+  it("treats a different host entirely (e.g. an internal target) as cross-site", () => {
+    expect(
+      isSameSiteAsPage("http://127.0.0.1/admin/reboot", "victim.example"),
+    ).toBe(false);
+  });
+
+  it("returns false for an unparsable URL", () => {
+    expect(isSameSiteAsPage("not a url", "example.com")).toBe(false);
+  });
+
+  it("does not collapse sibling tenants on a shared multi-tenant hosting apex", () => {
+    expect(
+      isSameSiteAsPage("https://attacker.github.io/icon.png", "victim.github.io"),
+    ).toBe(false);
+    expect(
+      isSameSiteAsPage("https://evil.vercel.app/icon.png", "my-app.vercel.app"),
+    ).toBe(false);
+  });
+
+  it("does not collapse sibling tenants on an un-enumerated multi-label ccTLD (co.il)", () => {
+    expect(
+      isSameSiteAsPage("https://tracker.co.il/icon.png", "victim.co.il"),
+    ).toBe(false);
+  });
+
+  it("still matches an exact host on a shared hosting apex", () => {
+    expect(
+      isSameSiteAsPage("https://victim.github.io/assets/icon.png", "victim.github.io"),
+    ).toBe(true);
+  });
+
+  it("treats a root-relative URL (Chrome's /_favicon/) as first-party", () => {
+    // Relative URLs resolve against the extension page's own origin, so they never
+    // trigger an off-site fetch — a manual pick of the Chrome-native favicon must pass.
+    expect(
+      isSameSiteAsPage(
+        "/_favicon/?pageUrl=https%3A%2F%2Fexample.com%2F&size=256",
+        "example.com",
+      ),
+    ).toBe(true);
+    expect(isSameSiteAsPage("/favicon.ico", "anything.example")).toBe(true);
+  });
+
+  it("does NOT treat a protocol-relative //host URL as first-party", () => {
+    expect(isSameSiteAsPage("//evil.example/pixel.png", "victim.example")).toBe(false);
+  });
+
+  it("does NOT treat authority-confusion root-relative URLs as first-party", () => {
+    // The WHATWG parser normalizes `\` to `/` and strips tab/CR/LF on http(s) schemes, so
+    // each of these resolves to a *remote* host despite the single leading slash. A naive
+    // `startsWith("/") && !startsWith("//")` guard would wrongly trust them.
+    const backslash = "/" + String.fromCharCode(92) + "evil.com/icon.png"; // /\evil.com/...
+    expect(isSameSiteAsPage(backslash, "victim.example")).toBe(false);
+    expect(isSameSiteAsPage("/\t/evil.com", "victim.example")).toBe(false);
+    expect(isSameSiteAsPage("/\r\n//evil.com", "victim.example")).toBe(false);
+  });
+
+  it("still treats a genuine root-relative path as first-party", () => {
+    // Regression guard: the authority-confusion fix must not reject the legit case.
+    expect(isSameSiteAsPage("/favicon.ico", "anything.example")).toBe(true);
+    expect(
+      isSameSiteAsPage("/assets/icons/favicon-32.png?v=2", "example.com"),
+    ).toBe(true);
+  });
+});
+
+describe("isThirdPartyFaviconUrl", () => {
+  it("flags the known mirror providers", () => {
+    expect(isThirdPartyFaviconUrl("https://www.google.com/s2/favicons?domain=x")).toBe(
+      true,
+    );
+    expect(isThirdPartyFaviconUrl("https://t2.gstatic.com/faviconV2?x")).toBe(true);
+    expect(isThirdPartyFaviconUrl("https://icons.duckduckgo.com/ip3/x.ico")).toBe(true);
+  });
+
+  it("does not flag first-party or same-site URLs", () => {
+    expect(isThirdPartyFaviconUrl("https://example.com/favicon.ico")).toBe(false);
+    expect(isThirdPartyFaviconUrl("/_favicon/?pageUrl=x")).toBe(false);
+  });
+});
+
+describe("gatedManualFavicon", () => {
+  it("returns undefined when there is no saved manual favicon", () => {
+    expect(gatedManualFavicon(undefined, "example.com", false)).toBeUndefined();
+    expect(gatedManualFavicon("", "example.com", true)).toBeUndefined();
+  });
+
+  it("uses a same-site manual pick regardless of the opt-in", () => {
+    expect(
+      gatedManualFavicon("https://example.com/icon.png", "example.com", false),
+    ).toBe("https://example.com/icon.png");
+    // Chrome's root-relative native favicon resolves to our own origin → first-party.
+    expect(gatedManualFavicon("/_favicon/?pageUrl=x", "example.com", false)).toBe(
+      "/_favicon/?pageUrl=x",
+    );
+  });
+
+  it("gates OUT an off-site manual pick when the per-site opt-in is off", () => {
+    // The core F8 property: a stale off-site/provider URL must NOT be returned (and thus
+    // not fetched) when third-party providers are disabled for the site.
+    expect(
+      gatedManualFavicon(
+        "https://icons.duckduckgo.com/ip3/example.com.ico",
+        "example.com",
+        false,
+      ),
+    ).toBeUndefined();
+    expect(
+      gatedManualFavicon("https://tracker.example/pixel.png", "example.com", false),
+    ).toBeUndefined();
+  });
+
+  it("allows an off-site manual pick once the per-site opt-in is on", () => {
+    expect(
+      gatedManualFavicon("https://tracker.example/pixel.png", "example.com", true),
+    ).toBe("https://tracker.example/pixel.png");
   });
 });
 
@@ -479,7 +631,7 @@ describe("getFaviconPickerCandidates", () => {
     expect(urls.some((u) => u.endsWith("/favicon.svg"))).toBe(true);
   });
 
-  it("includes icons declared in page HTML even with external providers off", async () => {
+  it("includes same-site declared icons regardless of the toggle, but gates off-site ones on it", async () => {
     const html =
       "<head>" +
       '<link rel="apple-touch-icon" sizes="180x180" href="/img/brand/touch-180.png">' +
@@ -521,27 +673,32 @@ describe("getFaviconPickerCandidates", () => {
       }),
     );
 
-    const list = await getFaviconPickerCandidates(
+    const off = await getFaviconPickerCandidates(
       "https://declared-icons.example/page",
       { externalFaviconProviders: false },
     );
-    const urls = list.map((o) => o.url);
-    expect(urls).toContain(
+    const offUrls = off.map((o) => o.url);
+    expect(offUrls).toContain(
       "https://declared-icons.example/img/brand/touch-180.png",
     );
-    expect(urls).toContain("https://cdn.example.net/icon.svg");
+    expect(offUrls).not.toContain("https://cdn.example.net/icon.svg");
+
+    const on = await getFaviconPickerCandidates(
+      "https://declared-icons.example/page",
+      { externalFaviconProviders: true },
+    );
+    const offSiteIcon = on.find((o) => o.url === "https://cdn.example.net/icon.svg");
+    expect(offSiteIcon).toBeDefined();
+    expect(offSiteIcon?.thirdParty).toBe(true);
   });
 
-  it("includes web-manifest icons (eBay-style PWA logo not in fixed guesses)", async () => {
+  it("includes same-site web-manifest icons regardless of the toggle, but gates off-site ones on it", async () => {
     const manifest = JSON.stringify({
       icons: [
+        { src: "/app-icons/app-192.png", sizes: "192x192", type: "image/png" },
+        { src: "/app-icons/app-512.png", sizes: "512x512", type: "image/png" },
         {
-          src: "https://cdn.example/app-192.png",
-          sizes: "192x192",
-          type: "image/png",
-        },
-        {
-          src: "https://cdn.example/app-512.png",
+          src: "https://cdn.example/off-site-512.png",
           sizes: "512x512",
           type: "image/png",
         },
@@ -568,13 +725,23 @@ describe("getFaviconPickerCandidates", () => {
       }),
     );
 
-    const list = await getFaviconPickerCandidates("https://pwa-site.example/", {
+    const off = await getFaviconPickerCandidates("https://pwa-site.example/", {
       externalFaviconProviders: false,
     });
-    const urls = list.map((o) => o.url);
-    // Collapsed to the largest manifest icon, and present even with mirrors off.
-    expect(urls).toContain("https://cdn.example/app-512.png");
-    expect(urls).not.toContain("https://cdn.example/app-192.png");
+    const offUrls = off.map((o) => o.url);
+    // Collapsed to the largest same-site manifest icon, present even with providers off.
+    expect(offUrls).toContain("https://pwa-site.example/app-icons/app-512.png");
+    expect(offUrls).not.toContain("https://pwa-site.example/app-icons/app-192.png");
+    // The off-site manifest icon is a different registrable domain, so it's omitted
+    // while opted out.
+    expect(offUrls).not.toContain("https://cdn.example/off-site-512.png");
+
+    const on = await getFaviconPickerCandidates("https://pwa-site.example/", {
+      externalFaviconProviders: true,
+    });
+    const offSitePick = on.find((o) => o.url === "https://cdn.example/off-site-512.png");
+    expect(offSitePick).toBeDefined();
+    expect(offSitePick?.thirdParty).toBe(true);
   });
 
   it("includes registrable apex mirrors for subdomains (PlayStation-style)", async () => {

@@ -195,15 +195,16 @@ export const bookmarks = makeAutoObservable({
   },
   async openAllWindow(id: string) {
     const urls = await browser.bookmarks.getSubTree(id);
-    const childUrls =
-      urls[0].children?.filter((b) => b.url).map((b) => b.url!) || [];
+    const childUrls = filter(urls[0].children || [])
+      .filter((b) => b.type === "bookmark" && b.url)
+      .map((b) => b.url!);
     bookmarks.openLinkWindow(childUrls);
   },
   async openAllTab(id: string) {
     const urls = await browser.bookmarks.getSubTree(id);
-    urls[0].children?.forEach(({ url }) => {
-      if (url) bookmarks.openLinkBackgroundTab(url);
-    });
+    filter(urls[0].children || [])
+      .filter((b) => b.type === "bookmark" && b.url)
+      .forEach((b) => bookmarks.openLinkBackgroundTab(b.url!));
   },
   openLinkBackgroundTab(url: string) {
     browser.tabs.create({ url, active: false });

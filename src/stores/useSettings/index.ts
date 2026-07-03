@@ -35,6 +35,7 @@ import {
   SITE_IMAGE_INFIX,
   SITE_TRANSPARENT_INFIX,
 } from "#lib/syncKeys";
+import { readOwn } from "#utils/readOwn";
 
 // ==================================================================
 // SETUP
@@ -488,7 +489,7 @@ export const settings = makeAutoObservable({
   },
 
   handleClearManualFavicon(hostname: string) {
-    if (settings.manualFavicons[hostname]) {
+    if (readOwn(settings.manualFavicons, hostname)) {
       runInAction(() => {
         remove(settings.manualFavicons, hostname);
       });
@@ -735,7 +736,10 @@ export const settings = makeAutoObservable({
 
   externalAllowedForUrl(url: string | undefined): boolean {
     if (!url) return false;
-    return Boolean(settings.externalProviderHosts[hostnameForSiteKey(url)]);
+    // Own-property check, not a truthy bracket lookup: externalProviderHosts is a plain
+    // object, so a bookmark hostname that collides with an inherited Object.prototype
+    // member (e.g. "constructor", "__proto__") would otherwise read as opted-in.
+    return Object.hasOwn(settings.externalProviderHosts, hostnameForSiteKey(url));
   },
 
   handleExternalForHost(hostname: string, allowed: boolean) {
@@ -946,8 +950,8 @@ if (browser.storage.onChanged) {
             storageKey.replace(/-([a-z])/g, (g) => g[1].toUpperCase());
           // Skip removals (newValue === undefined): a deleted key must not clobber a
           // settings object with undefined. Dropping the legacy manual-favicons blob
-          // during migration would otherwise set manualFavicons = undefined and crash
-          // the dial's `settings.manualFavicons[host]` lookups.
+          // during migration would otherwise set manualFavicons = undefined, breaking the
+          // per-site manual-favicon set()/remove() writes that assume a live object.
           if (settingKey in settings && newValue !== undefined) {
             set(
               settings,

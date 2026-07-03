@@ -28,10 +28,13 @@
  * trailing labels (`google.co.uk`, not `co.uk`).
  *
  * **HTML `<link>` discovery** runs during automatic resolution (not only the picker):
- * a bounded read of the bookmark's `<head>` parses declared icon links and follows
- * their hrefs **even cross-origin**. A site's own declared icon is first-party (unlike
- * domain-keyed favicon aggregators, which the `externalFaviconProviders` toggle gates),
- * so this also runs in privacy mode.
+ * a bounded read of the bookmark's `<head>` parses declared icon links and follows their
+ * hrefs, same-origin or not. An off-site href — like a domain-keyed aggregator — is only
+ * followed when `externalFaviconProviders` is on for that site; a same-registrable-site
+ * href (its own CDN) always is. Manifest icon `src` values are gated the same way. The
+ * manual picker applies the identical rule: same-site declared/manifest icons always
+ * show, off-site ones are tagged third-party (like mirror providers) and only surfaced
+ * when the per-site toggle is on.
  */
 import { get, set } from "idb-keyval";
 
@@ -42,7 +45,7 @@ export const FAVICON_MIN_QUALITY_PX = 48;
  * Bump when favicon candidate strategy changes so clients refetch sharper sources.
  * `e` / `i` suffix: external mirrors vs first-party-only cache entries.
  */
-const CACHE_PREFIX = "fsd-fav24-";
+const CACHE_PREFIX = "fsd-fav25-";
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 export type FaviconCandidateType =
@@ -197,6 +200,57 @@ function naiveRegistrableHost(hostname: string): string {
 }
 
 /**
+ * True when `url`'s host is the same site as `pageHostname`: an exact hostname match, or
+ * one that differs only by a leading `www.`. Used to gate manifest / declared `<link>`
+ * icon hrefs that point elsewhere: those are a different origin's resource, not "the
+ * page's own icon", so they're held to the same `externalFaviconProviders` opt-in as
+ * mirror providers.
+ *
+ * Deliberately fails closed rather than collapsing to a registrable domain: an earlier
+ * version compared `naiveRegistrableHost` results (to allow e.g. a CDN subdomain of the
+ * same company), but review found that heuristic collapses unrelated sibling tenants
+ * together on any suffix it doesn't special-case — both single-label shared-hosting
+ * apexes (`attacker.github.io` / `victim.github.io` → `github.io`) and un-enumerated
+ * multi-label ccTLDs (`tracker.co.il` / `victim.co.il` → `co.il`, since `co.il` isn't in
+ * {@link MULTI_LABEL_PUBLIC_SUFFIX2}). Getting that right in general needs a real,
+ * maintained public-suffix list; until this uses one, an exact-host check can't be
+ * bypassed by any suffix, known or not, at the cost of not recognizing a legitimate CDN
+ * subdomain as first-party.
+ *
+ * A root-relative URL (e.g. Chrome's own `/_favicon/?pageUrl=…`) is treated as first-party
+ * only when it *actually* resolves against the extension page's own origin. We resolve it
+ * against a sentinel origin and compare rather than string-sniffing for a leading slash:
+ * on special (http/https) schemes the WHATWG URL parser normalizes `\` to `/` and strips
+ * tab/CR/LF before parsing, so `/\evil.com`, `/<TAB>/evil.com`, `/<CRLF>//evil.com` etc.
+ * all resolve to a *remote* authority despite starting with a single slash. A naive
+ * `startsWith("/") && !startsWith("//")` check trusts those and fails open; resolving
+ * against the sentinel closes the whole authority-confusion class (including `//host`) at
+ * once. Anything that isn't an absolute same-host URL, or a relative URL resolving to our
+ * own origin, fails closed.
+ */
+const SAME_SITE_SENTINEL_ORIGIN = "https://speed-dial.invalid";
+
+export function isSameSiteAsPage(url: string, pageHostname: string): boolean {
+  if (url.startsWith("/")) {
+    try {
+      return (
+        new URL(url, `${SAME_SITE_SENTINEL_ORIGIN}/`).origin ===
+        SAME_SITE_SENTINEL_ORIGIN
+      );
+    } catch {
+      return false;
+    }
+  }
+  try {
+    const candidateHost = new URL(url).hostname.toLowerCase().replace(/^www\./, "");
+    const pageHost = pageHostname.toLowerCase().replace(/^www\./, "");
+    return candidateHost === pageHost;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Hostnames for third-party favicon mirrors: **registrable domain first**, then the
  * full host when they differ (e.g. `playstation.com`, then `library.playstation.com`).
  */
@@ -205,6 +259,48 @@ export function mirrorHostnamesForFavicon(hostname: string): string[] {
   const apex = naiveRegistrableHost(hostname);
   if (h.toLowerCase() === apex) return [h];
   return [apex, h];
+}
+
+/** Hostnames of the fixed third-party mirror providers built by
+ * {@link buildMirrorFaviconCandidatesForSingleHost} — kept in sync with that function. */
+const THIRD_PARTY_FAVICON_HOSTNAMES = new Set([
+  "www.google.com",
+  "t2.gstatic.com",
+  "icon.horse",
+  "unavatar.io",
+  "icons.duckduckgo.com",
+]);
+
+/**
+ * True when `url` points at one of the fixed third-party mirror providers. Used to keep a
+ * previously-saved favicon (e.g. a manual pick made while providers were on) from being
+ * surfaced/loaded once the per-site external-provider toggle is off.
+ */
+export function isThirdPartyFaviconUrl(url: string): boolean {
+  try {
+    return THIRD_PARTY_FAVICON_HOSTNAMES.has(new URL(url).hostname);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The saved manual favicon to actually use for `host`, honoring the per-site third-party
+ * opt-out. An off-site (cross-host) manual pick — e.g. a provider/CDN URL chosen while
+ * providers were enabled, then left behind when the toggle was turned off — is only used
+ * when `externalFav` is true; a same-site (or root-relative, extension-origin) pick is
+ * always used. Returns `undefined` to fall through to automatic resolution. Shared by the
+ * dial and the bookmark-editor colour effect so both honor the opt-out identically. (The
+ * favicon picker uses a stricter gate — it also blocks a mirror on its own domain — since
+ * it's deciding what to *display* as a contactable row.)
+ */
+export function gatedManualFavicon(
+  rawManual: string | undefined,
+  host: string,
+  externalFav: boolean,
+): string | undefined {
+  if (!rawManual) return undefined;
+  return externalFav || isSameSiteAsPage(rawManual, host) ? rawManual : undefined;
 }
 
 /**
@@ -1348,18 +1444,35 @@ export async function getFaviconPickerCandidates(
   const fixedOptions = buildPickerOptionsForPage(parsed, pageUrl, external);
 
   // Add the web-manifest + declared <link> icons the automatic resolver uses (collapsed
-  // to the largest of each type). Both are first-party, so they show in privacy mode too.
+  // to the largest of each type). A same-host icon is first-party and always shown; an
+  // off-site one (a different host — including a subdomain, since `isSameSiteAsPage`
+  // matches the host exactly) is tagged third-party like the mirror providers and only
+  // included when third-party providers are allowed, so the per-site toggle governs it
+  // consistently everywhere.
   const [manifestPicks, declaredPicks] = await Promise.all([
     fetchManifestIconCandidates(parsed.origin, () => true),
     gatherHtmlDeclaredIconPicks(pageUrl, () => true),
   ]);
-  const extraOptions = collapsePicksByTypeKeepLargest([
-    ...manifestPicks,
-    ...declaredPicks,
-  ]).map((pick) => ({
-    name: pickerCandidateName(pick.type, pick.width),
-    url: pick.url,
-  }));
+  const allExtraPicks = [...manifestPicks, ...declaredPicks];
+  const sameSitePicks = allExtraPicks.filter((p) =>
+    isSameSiteAsPage(p.url, parsed.hostname),
+  );
+  const offSitePicks = allExtraPicks.filter(
+    (p) => !isSameSiteAsPage(p.url, parsed.hostname),
+  );
+  const extraOptions = [
+    ...collapsePicksByTypeKeepLargest(sameSitePicks).map((pick) => ({
+      name: pickerCandidateName(pick.type, pick.width),
+      url: pick.url,
+    })),
+    ...(external
+      ? collapsePicksByTypeKeepLargest(offSitePicks).map((pick) => ({
+          name: pickerCandidateName(pick.type, pick.width),
+          url: pick.url,
+          thirdParty: true,
+        }))
+      : []),
+  ];
 
   const result = dedupePickerMergeHttpDuplicates(
     mergePickerOptionsPreferFirst(fixedOptions, extraOptions),
@@ -1502,8 +1615,13 @@ async function probePageForFavicon(
   }
 
   if (!alive()) return null;
-  const manifest = await fetchManifestIconCandidates(parsed.origin, alive);
+  const manifestAll = await fetchManifestIconCandidates(parsed.origin, alive);
   if (!alive()) return null;
+  // A manifest icon `src` can be an absolute URL pointing anywhere; only trust off-site
+  // ones when third-party providers are allowed for this site.
+  const manifest = externalFaviconProviders
+    ? manifestAll
+    : manifestAll.filter((c) => isSameSiteAsPage(c.url, parsed.hostname));
 
   const t1 = tier1Candidates(parsed, pageUrl);
   /*
@@ -1576,7 +1694,11 @@ async function probePageForFavicon(
       bestAType === "gstatic" ||
       bestAType === "duckduckgo";
     if (shouldTryHtml) {
-      const htmlCandidates = await gatherHtmlDeclaredIconPicks(pageUrl, alive);
+      const htmlCandidatesAll = await gatherHtmlDeclaredIconPicks(pageUrl, alive);
+      // A declared <link> href can point off-site too; same opt-in as manifest icons.
+      const htmlCandidates = externalFaviconProviders
+        ? htmlCandidatesAll
+        : htmlCandidatesAll.filter((c) => isSameSiteAsPage(c.url, parsed.hostname));
       if (alive() && htmlCandidates.length > 0) {
         const htmlResults = await probeQueueWithSlots(htmlCandidates, alive, {});
         if (alive()) {
