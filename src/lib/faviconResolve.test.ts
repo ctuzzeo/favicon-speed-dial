@@ -279,6 +279,22 @@ describe("isSameSiteAsPage", () => {
       isSameSiteAsPage("https://victim.github.io/assets/icon.png", "victim.github.io"),
     ).toBe(true);
   });
+
+  it("treats a root-relative URL (Chrome's /_favicon/) as first-party", () => {
+    // Relative URLs resolve against the extension page's own origin, so they never
+    // trigger an off-site fetch — a manual pick of the Chrome-native favicon must pass.
+    expect(
+      isSameSiteAsPage(
+        "/_favicon/?pageUrl=https%3A%2F%2Fexample.com%2F&size=256",
+        "example.com",
+      ),
+    ).toBe(true);
+    expect(isSameSiteAsPage("/favicon.ico", "anything.example")).toBe(true);
+  });
+
+  it("does NOT treat a protocol-relative //host URL as first-party", () => {
+    expect(isSameSiteAsPage("//evil.example/pixel.png", "victim.example")).toBe(false);
+  });
 });
 
 describe("isThirdPartyFaviconUrl", () => {

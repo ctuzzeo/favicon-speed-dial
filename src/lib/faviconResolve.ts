@@ -216,8 +216,14 @@ function naiveRegistrableHost(hostname: string): string {
  * maintained public-suffix list; until this uses one, an exact-host check can't be
  * bypassed by any suffix, known or not, at the cost of not recognizing a legitimate CDN
  * subdomain as first-party.
+ *
+ * A root-relative URL (one leading slash, e.g. Chrome's own `/_favicon/?pageUrl=…`) is
+ * treated as first-party: it can only ever resolve against the extension page's own
+ * origin, so it never triggers an off-site fetch. `//host/…` (protocol-relative → a real
+ * remote host) and anything else that isn't an absolute same-host URL fail closed.
  */
 export function isSameSiteAsPage(url: string, pageHostname: string): boolean {
+  if (url.startsWith("/") && !url.startsWith("//")) return true;
   try {
     const candidateHost = new URL(url).hostname.toLowerCase().replace(/^www\./, "");
     const pageHost = pageHostname.toLowerCase().replace(/^www\./, "");

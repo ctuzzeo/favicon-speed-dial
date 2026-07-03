@@ -16,6 +16,7 @@ import {
 import { hostnameForSiteKey } from "#lib/syncKeys";
 import { contextMenu } from "#stores/useContextMenu";
 import { settings } from "#stores/useSettings";
+import { readOwn } from "#utils/readOwn";
 
 import "./styles.css";
 
@@ -154,9 +155,7 @@ const Favicon = observer(function Favicon({
   const probeGen = useRef(0);
   const parsed = url ? parseBookmarkUrl(url) : null;
   const hostname = parsed?.hostname ?? "";
-  const manualFaviconOverride = hostname
-    ? settings.manualFavicons?.[hostname]
-    : undefined;
+  const manualFaviconOverride = readOwn(settings.manualFavicons, hostname);
   const externalFav = settings.externalAllowedForUrl(url);
 
   const placeholderUrl = url ? getPlaceholderFaviconUrl(url, externalFav) : null;
@@ -178,7 +177,7 @@ const Favicon = observer(function Favicon({
     }
 
     const host = parsedUrl.hostname;
-    const rawManual = settings.manualFavicons?.[host];
+    const rawManual = readOwn(settings.manualFavicons, host);
     // An off-site manual pick (e.g. a provider variant saved while providers were on)
     // is only trusted unconditionally while it stays same-site; otherwise it needs the
     // per-site opt-in like any other off-site source, so it falls through to normal

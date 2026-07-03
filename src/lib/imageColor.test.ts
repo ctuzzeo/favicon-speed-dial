@@ -126,15 +126,35 @@ describe("fetchImageBlobBounded", () => {
     expect(result.kind).toBe("rejected");
   });
 
-  it("rejects (not a network error) a response whose content-type isn't image/*", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () =>
-        makeStreamResponse([new Uint8Array([1, 2, 3])], { contentType: "text/plain" }),
-      ),
-    );
-    const result = await fetchImageBlobBounded("https://x.example/icon.png", () => true);
-    expect(result.kind).toBe("rejected");
+  it("rejects (not a network error) a clearly-non-image document content-type", async () => {
+    for (const contentType of [
+      "text/html",
+      "text/html; charset=utf-8",
+      "application/json",
+      "application/xml",
+    ]) {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () =>
+          makeStreamResponse([new Uint8Array([1, 2, 3])], { contentType }),
+        ),
+      );
+      const result = await fetchImageBlobBounded("https://x.example/icon", () => true);
+      expect(result.kind, contentType).toBe("rejected");
+    }
+  });
+
+  it("allows a generic/mislabelled content-type through the capped stream (CDN .ico case)", async () => {
+    for (const contentType of ["application/octet-stream", "text/plain", ""]) {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () =>
+          makeStreamResponse([new Uint8Array([1, 2, 3, 4])], { contentType }),
+        ),
+      );
+      const result = await fetchImageBlobBounded("https://x.example/icon.ico", () => true);
+      expect(result.kind, contentType).toBe("blob");
+    }
   });
 
   it("cancels and rejects (not a network error) once the byte cap is exceeded", async () => {
@@ -211,5 +231,40 @@ describe("fetchImageBlobBounded", () => {
     );
     const result = await fetchImageBlobBounded("https://x.example/icon.png", () => true);
     expect(result.kind).toBe("network-error");
+  });
+
+  it("rejects (does NOT fall back) when the fetch times out", async () => {
+    // AbortSignal.timeout aborts with a TimeoutError DOMException; a too-slow resource
+    // must not be retried via an unbounded <img> load, so it's a rejection not a
+    // network-error.
+    const timeoutErr = Object.assign(new Error("timed out"), { name: "TimeoutError" });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw timeoutErr;
+      }),
+    );
+    const result = await fetchImageBlobBounded("https://x.example/slow.png", () => true);
+    expect(result.kind).toBe("rejected");
+  });
+
+  it("rejects when the stream is aborted mid-read (timeout during body)", async () => {
+    const abortErr = Object.assign(new Error("aborted"), { name: "AbortError" });
+    const reader = {
+      read: vi.fn(async () => {
+        throw abortErr;
+      }),
+      cancel: async () => {},
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        body: { getReader: () => reader },
+        headers: { get: () => "image/png" },
+      })),
+    );
+    const result = await fetchImageBlobBounded("https://x.example/slow.png", () => true);
+    expect(result.kind).toBe("rejected");
   });
 });

@@ -12,6 +12,7 @@ import {
 import { bookmarks } from "#stores/useBookmarks";
 import { modals } from "#stores/useModals";
 import { settings } from "#stores/useSettings";
+import { readOwn } from "#utils/readOwn";
 
 import "./styles.css";
 
@@ -130,9 +131,7 @@ export const FaviconModal = observer(function FaviconModal() {
   } catch {
     /* invalid bookmark URL */
   }
-  const currentManual = currentHostname
-    ? settings.manualFavicons?.[currentHostname]
-    : undefined;
+  const currentManual = readOwn(settings.manualFavicons, currentHostname);
   // Show third-party rows only when the per-site toggle is on (so they're contacted only
   // when allowed); first-party rows always show. loadedUrls is preserved across toggles,
   // so already-loaded icons don't vanish when flipping it off.
